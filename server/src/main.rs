@@ -7,7 +7,8 @@ use actix_web::{
 };
 use routes::{
     health_routes::health_check,
-    user_routes::{get_all_users, register_user},
+    protocol_routes::{add_protocol_staff, get_all_protocols, register_protocol},
+    user_routes::{get_all_users, link_wallet_address, login_user, register_user},
 };
 use services::db::Database;
 use std::env;
@@ -34,6 +35,11 @@ async fn main() -> std::io::Result<()> {
             .service(health_check)
             .service(get_all_users)
             .service(register_user)
+            .service(link_wallet_address)
+            .service(login_user)
+            .service(register_protocol)
+            .service(get_all_protocols)
+            .service(add_protocol_staff)
     })
     .bind((server_url, port))?
     .run()
