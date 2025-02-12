@@ -164,7 +164,7 @@ contract Quest is Ownable, ERC1155, CoprocessorAdapter {
     }
 
     /// @dev A callback for coprocessor after running calculations with the submitted results
-    function handleNotice(bytes memory notice) external {
+    function handleNotice(bytes memory notice) internal {
         (
             address[] memory participants,
             address[] memory winners,
