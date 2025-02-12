@@ -7,22 +7,21 @@ import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {QuestNft} from "./quest_nft.sol";
 
 contract Quest is Ownable, ERC1155 {
     using SafeERC20 for IERC20;
-    address coprocessorAdapter = 0x05D032ac25d322df992303dCa074EE7392C117b9;
 
+    uint256 _tokenIdCounter;
+
+    address coprocessorAdapter = 0xff35E413F5e22A9e1Cc02F92dcb78a5076c1aaf3;
     address protocolVault;
     address[] public quizParticipants;
     address[] public hackathonParticipants;
-
     address[] public quizWinners;
     address[] public hackathonWinners;
 
     Quiz public quiz;
     Hackathon public hackathon;
-
     Trivium public currentEventType;
 
     /// @notice Keeps track of scores of participants
@@ -173,7 +172,8 @@ contract Quest is Ownable, ERC1155 {
     ) external {
         require(msg.sender == coprocessorAdapter, UnauthorizedCaller());
         // Ensure the input arrays have the same length
-        require(participants.length == scores.length, LengthMismatch());
+        require(scores.length == participants.length, LengthMismatch());
+        require(tokenUris.length == participants.length, LengthMismatch());
 
         uint256 rewardPerWinner = (quiz.reward / winners.length);
         address token = quiz.token;
@@ -191,8 +191,9 @@ contract Quest is Ownable, ERC1155 {
             for (uint256 i = 0; i < participants.length; i++) {
                 quizParticipants.push(participants[i]);
                 scorePerParticipant[participants[i]] = scores[i];
-                _mint(participants[i], i, 1, "");
-                _setTokenURI(i, tokenUris[i]);
+                uint256 tokenId = _tokenIdCounter++;
+                _mint(participants[i], tokenId, 1, "");
+                _setTokenURI(tokenId, tokenUris[i]);
             }
         } else if (currentEventType == Trivium.hackathon) {
             for (uint256 i = 0; i < winners.length; i++) {
@@ -203,8 +204,9 @@ contract Quest is Ownable, ERC1155 {
             for (uint256 i = 0; i < participants.length; i++) {
                 hackathonParticipants.push(participants[i]);
                 scorePerParticipant[participants[i]] = scores[i];
-                _mint(participants[i], i, 1, "");
-                _setTokenURI(i, tokenUris[i]);
+                uint256 tokenId = _tokenIdCounter++;
+                _mint(participants[i], tokenId, 1, "");
+                _setTokenURI(tokenId, tokenUris[i]);
             }
         }
     }
@@ -257,6 +259,7 @@ contract Quest is Ownable, ERC1155 {
     //////////      INTERNALS       ///////////
 
     function _setTokenURI(uint256 tokenId, string memory newURI) internal {
+        require(bytes(_tokenURIs[tokenId]).length == 0, "URI already set");
         _tokenURIs[tokenId] = newURI;
     }
 
