@@ -1,4 +1,5 @@
 use crate::models::protocol_model::Protocol;
+use crate::models::quiz_model::{Participant, Quiz};
 use crate::models::user_model::{SimpleUserStruct, User, Wallet};
 use dotenv::dotenv;
 use futures::TryStreamExt;
@@ -18,6 +19,7 @@ use std::result;
 pub struct Database {
     users: Collection<User>,
     protocols: Collection<Protocol>,
+    quizes: Collection<Quiz>,
 }
 
 #[derive(Debug)]
@@ -56,8 +58,13 @@ impl Database {
 
         let users = db.collection("users");
         let protocols = db.collection("protocols");
+        let quizes = db.collection("quizes");
         println!("DATABASE CONNECTION SUCCESSFUL!!!!");
-        return Database { users, protocols };
+        return Database {
+            users,
+            protocols,
+            quizes,
+        };
     }
 
     pub async fn create_user(&self, user: User) -> Result<InsertOneResult, DatabaseResponse> {
@@ -193,6 +200,73 @@ impl Database {
                 500,
                 format!("{}, {}", "Error retrieving protocols", e),
             )),
+        }
+    }
+
+    pub async fn add_quiz(&self, quiz: Quiz) -> Result<InsertOneResult, DatabaseResponse> {
+        match self.quizes.insert_one(quiz).await {
+            Ok(result) => Ok(result),
+            Err(e) => Err(DatabaseResponse::new(
+                500,
+                format!("{}, {}", "Error creating quiz", e),
+            )),
+        }
+    }
+
+    pub async fn get_quiz_via_uuid(&self, uuid: String) -> Result<Quiz, DatabaseResponse> {
+        let result = self.quizes.find_one(doc! {"uuid": uuid}).await;
+
+        match result {
+            Ok(Some(quiz)) => Ok(quiz),
+            Ok(None) => Err(DatabaseResponse::new(404, "User not found".to_string())),
+            Err(e) => Err(DatabaseResponse::new(500, format!("Database error: {}", e))),
+        }
+    }
+
+    pub async fn get_quiz_participant_via_uuid(
+        &self,
+        quiz_uuid: String,
+        participant_uuid: String,
+    ) -> Result<Participant, DatabaseResponse> {
+        let result = self.quizes.find_one(doc! {"uuid": quiz_uuid}).await;
+
+        match result {
+            Ok(Some(quiz)) => {
+                if let Some(participant) = quiz
+                    .participants
+                    .iter()
+                    .find(|p| p.user_uuid == participant_uuid)
+                {
+                    Ok(participant.clone())
+                } else {
+                    Err(DatabaseResponse::new(
+                        404,
+                        format!(
+                            "Participant not found in quiz with UUID: {}",
+                            participant_uuid
+                        ),
+                    ))
+                }
+            }
+            Ok(None) => Err(DatabaseResponse::new(404, "Quiz not found".to_string())),
+            Err(e) => Err(DatabaseResponse::new(500, format!("Database error: {}", e))),
+        }
+    }
+
+    pub async fn update_quiz(&self, quiz: Quiz) -> Result<Quiz, DatabaseResponse> {
+        let result = self
+            .quizes
+            .replace_one(doc! {"uuid": quiz.uuid.clone()}, quiz.clone())
+            .await;
+        match result {
+            Ok(update_result) => {
+                if update_result.modified_count == 0 {
+                    Err(DatabaseResponse::new(404, "Quiz not found".to_string()))
+                } else {
+                    Ok(quiz)
+                }
+            }
+            Err(e) => Err(DatabaseResponse::new(500, format!("{}", e))),
         }
     }
 }

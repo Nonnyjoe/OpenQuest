@@ -2,31 +2,58 @@ mod models;
 mod routes;
 mod services;
 mod utils;
+
 use actix_web::{
     get, http, middleware::Logger, web, web::Data, App, HttpResponse, HttpServer, Responder,
 };
+use dotenv::dotenv;
 use routes::{
     health_routes::health_check,
     protocol_routes::{add_protocol_staff, get_all_protocols, register_protocol},
     user_routes::{get_all_users, link_wallet_address, login_user, register_user},
 };
 use services::db::Database;
+use services::quiz_service::QuizService;
 use std::env;
+use std::sync::Arc;
+use tokio::task; // Import the QuizService
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    // Set environment variables for logging
     std::env::set_var("RUST_LOG", "debug");
     std::env::set_var("RUST_BACKTRACE", "1");
     env_logger::init();
-    let db = Database::init().await;
 
+    // Initialize the database
+    let db = Database::init().await;
+    let db_data = Data::new(db.clone());
+    dotenv().ok();
+    let db_url = env::var("DB_URL").expect("DB_URL must be set");
+    let rpc = env::var("RPC").expect("RPC must be set");
+    let rpc = env::var("RPC").expect("RPC must be set");
+    let private_key = env::var("PRIVATE_KEY").expect("PRIVATE_KEY must be set");
+    let open_quest_factory_address =
+        env::var("OPENQUEST_FACTORY").expect("OPENQUEST_FACTORY must be set");
+
+    // Initialize QuizService for background quiz submission
+    let quiz_service =
+        Arc::new(QuizService::new(db_url, rpc, private_key, open_quest_factory_address).await);
+
+    // Spawn a new thread to check & submit quizzes in the background
+    let quiz_service_clone = quiz_service.clone();
+    task::spawn(async move {
+        quiz_service_clone.start_quiz_submission().await;
+    });
+
+    // Set server configurations
     let server_url = env::var("SERVER_URL").unwrap_or_else(|_| String::from("127.0.0.1"));
     let port: u16 = env::var("PORT")
         .unwrap_or_else(|_| String::from("80"))
         .parse()
         .expect("Not a valid port");
 
-    let db_data = Data::new(db);
-
+    // Start the HTTP server
     HttpServer::new(move || {
         let logger = Logger::default();
         App::new()
