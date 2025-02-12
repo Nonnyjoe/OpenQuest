@@ -1,19 +1,18 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {ICoprocessorAdapter} from "./ICoprocessorAdapter.sol";
+import "../lib/coprocessor-base-contract/src/CoprocessorAdapter.sol";
+
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-contract Quest is Ownable, ERC1155 {
+contract Quest is Ownable, ERC1155, CoprocessorAdapter {
     using SafeERC20 for IERC20;
 
     uint256 _tokenIdCounter;
-
-    address coprocessorAdapter = 0xff35E413F5e22A9e1Cc02F92dcb78a5076c1aaf3;
     address protocolVault;
     address[] public quizParticipants;
     address[] public hackathonParticipants;
@@ -37,7 +36,6 @@ contract Quest is Ownable, ERC1155 {
 
     struct Hackathon {
         string title;
-        string tokenUri;
         uint256 start;
         uint256 stop;
         uint256 bounty;
@@ -50,7 +48,6 @@ contract Quest is Ownable, ERC1155 {
         address admin;
         address token;
         string title;
-        string tokenUri;
         uint256 start;
         uint256 stop;
         uint256 reward;
@@ -72,8 +69,8 @@ contract Quest is Ownable, ERC1155 {
         uint256 rewardPerWinner,
         uint256 time
     );
-
     event TransferFailed(address indexed to, uint256 amount, bytes reason);
+    event ActionAttempted(address indexed by, uint256 time);
 
     /// ERRORS  ///
     error NotQuizAdmin();
@@ -87,21 +84,25 @@ contract Quest is Ownable, ERC1155 {
     error QuizStillActive();
     error HackathonStillActive();
     error InvalidAddress();
-    error UnauthorizedCaller();
     error LengthMismatch();
     error NotStaffMember();
     error NoWinners();
     constructor(
         address admin,
-        string memory tokenUri,
         string memory title,
         uint256 start,
         uint256 stop,
         uint256 bounty,
         address token,
         address vault,
-        Trivium trivium
-    ) ERC1155(tokenUri) Ownable(admin) {
+        Trivium trivium,
+        address _taskIssuerAddress,
+        bytes32 _machineHash
+    )
+        ERC1155("")
+        Ownable(admin)
+        CoprocessorAdapter(_taskIssuerAddress, _machineHash)
+    {
         protocolVault = vault;
 
         if (trivium == Trivium.quiz) {
@@ -109,7 +110,6 @@ contract Quest is Ownable, ERC1155 {
                 admin: admin,
                 token: token,
                 title: title,
-                tokenUri: tokenUri,
                 start: start,
                 stop: stop,
                 reward: bounty,
@@ -120,7 +120,6 @@ contract Quest is Ownable, ERC1155 {
         if (trivium == Trivium.hackathon) {
             hackathon = Hackathon({
                 title: title,
-                tokenUri: tokenUri,
                 start: start,
                 stop: stop,
                 bounty: bounty,
@@ -135,8 +134,9 @@ contract Quest is Ownable, ERC1155 {
     modifier onlyOwnerOrStaff() {
         require(
             msg.sender == owner() || protocolStaff[msg.sender],
-            UnauthorizedCaller()
+            UnauthorizedCaller(msg.sender)
         );
+        emit ActionAttempted(msg.sender, block.timestamp);
         _;
     }
 
@@ -148,7 +148,7 @@ contract Quest is Ownable, ERC1155 {
         }
     }
 
-    function submitResults(
+    function runExecution(
         bytes calldata data,
         uint256 id
     ) external onlyOwnerOrStaff {
@@ -160,27 +160,27 @@ contract Quest is Ownable, ERC1155 {
             HackathonResults[id] = data;
         }
 
-        ICoprocessorAdapter(coprocessorAdapter).callCoprocessor(data);
+        callCoprocessor(data);
     }
 
     /// @dev A callback for coprocessor after running calculations with the submitted results
-    function receiveCoprocessorResult(
-        address[] memory participants,
-        address[] memory winners,
-        uint256[] memory scores,
-        string[] memory tokenUris
-    ) external {
-        require(msg.sender == coprocessorAdapter, UnauthorizedCaller());
+    function handleNotice(bytes memory notice) external {
+        (
+            address[] memory participants,
+            address[] memory winners,
+            uint256[] memory scores,
+            string[] memory tokenUris
+        ) = abi.decode(notice, (address[], address[], uint256[], string[]));
         // Ensure the input arrays have the same length
         require(scores.length == participants.length, LengthMismatch());
         require(tokenUris.length == participants.length, LengthMismatch());
+        require(winners.length > 0, NoWinners());
 
         uint256 rewardPerWinner = (quiz.reward / winners.length);
         address token = quiz.token;
 
         if (currentEventType == Trivium.quiz) {
             // add winners to quizWinners
-            require(winners.length > 0, NoWinners());
             for (uint256 i = 0; i < winners.length; i++) {
                 quizWinners.push(winners[i]);
                 IERC20(token).safeTransfer(winners[i], rewardPerWinner);
@@ -223,7 +223,6 @@ contract Quest is Ownable, ERC1155 {
         emit StaffRemoved(msg.sender, staff, block.timestamp);
     }
 
-
     function changeAdmin(address newAdmin) external onlyOwner {
         require(newAdmin != address(0), InvalidAddress());
         if (currentEventType == Trivium.quiz) {
@@ -259,18 +258,17 @@ contract Quest is Ownable, ERC1155 {
     //////////      INTERNALS       ///////////
 
     function _setTokenURI(uint256 tokenId, string memory newURI) internal {
+        require(bytes(newURI).length > 0, "Invalid URI");
         require(bytes(_tokenURIs[tokenId]).length == 0, "URI already set");
         _tokenURIs[tokenId] = newURI;
     }
 
     //////////      VIEW FUNCTIONS      //////////////////
     function getQuiz() external view returns (Quiz memory) {
-        require(quiz.published, QuizNotPublished());
         return quiz;
     }
 
     function getHackathon() external view returns (Hackathon memory) {
-        require(hackathon.published, HackathonNotPublished());
         return hackathon;
     }
 
@@ -286,5 +284,7 @@ contract Quest is Ownable, ERC1155 {
         return hackathonWinners;
     }
 
-    receive() external payable {}
+
+
+    // receive() external payable {}
 }

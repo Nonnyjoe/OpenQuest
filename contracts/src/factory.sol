@@ -7,7 +7,13 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 contract Factory is Ownable {
+    /*
+        Creates a child contract using the details fed into the `createTrivia` function
+        Only tokens can be used for now, Eth cannot be used.
+     */
     using SafeERC20 for IERC20;
+    address taskIssuerAddress;
+    bytes32 machineHash;
     address protocolVault;
     uint256 public totalDeployments;
     uint256 public totalQuiz;
@@ -27,38 +33,44 @@ contract Factory is Ownable {
     event QuizCreated(address indexed admin, uint256 time);
     event HackathonCreated(address indexed admin, uint256 time);
 
-    constructor(address vault) Ownable(msg.sender) {
-        require(vault != address(0), InvalidTokenAddress());
+    constructor(
+        address vault,
+        address _taskIssuerAddress,
+        bytes32 _machineHash
+    ) Ownable(msg.sender) {
+        require(vault != address(0) && _taskIssuerAddress != address(0), InvalidTokenAddress());
         protocolVault = vault;
+        taskIssuerAddress = _taskIssuerAddress;
+        machineHash = _machineHash;
     }
 
     function createTrivia(
-        string memory tokenUri,
         string memory title,
         uint256 start,
         uint256 stop,
         uint256 totalPrize,
         address token,
         Quest.Trivium trivium
-    ) external returns(address){
+    ) external returns (address) {
         address admin = msg.sender;
 
-       if (start <= block.timestamp || stop <= start) revert InvalidStartTime();
+        if (start <= block.timestamp || stop <= start)
+            revert InvalidStartTime();
         require(token != address(0), InvalidTokenAddress());
-        require(bytes(tokenUri).length > 0, InvalidTokenUri());
         require(bytes(title).length > 0, InvalidTitle());
         require(totalPrize > 0, InvalidPrize());
 
         Quest quest = new Quest(
             admin,
-            tokenUri,
             title,
             start,
             stop,
             totalPrize,
             token,
             protocolVault,
-            trivium
+            trivium,
+            taskIssuerAddress,
+            machineHash
         );
 
         address child = address(quest);
@@ -74,7 +86,7 @@ contract Factory is Ownable {
         } else if (trivium == Quest.Trivium.hackathon) {
             totalHackathon++;
             totalDeployments++;
-            /// sent the prize money 
+            /// sent the prize money
             IERC20(token).safeTransferFrom(msg.sender, child, totalPrize);
 
             emit HackathonCreated(admin, block.timestamp);
@@ -85,5 +97,5 @@ contract Factory is Ownable {
         return child;
     }
 
-    receive() external payable {}
+    // receive() external payable {}
 }
