@@ -7,6 +7,8 @@ pub struct Protocol {
     pub protocol_users: Vec<ProtocolUsers>,
     pub created_at: String,
     pub created_by: String,
+    pub quizes: Vec<String>,
+    pub total_expense: f64,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -23,6 +25,8 @@ impl Protocol {
             protocol_users: Vec::new(),
             created_at: chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string(),
             created_by: creator_uuid,
+            total_expense: 0.0,
+            quizes: Vec::new(),
         }
     }
 
@@ -36,6 +40,16 @@ impl Protocol {
             user_uuid,
             leaderboard_point: 0,
         });
+        return true;
+    }
+
+    pub fn update_total_expense(&mut self, expense: f64) -> bool {
+        self.total_expense += expense;
+        return true;
+    }
+
+    pub fn add_quiz(&mut self, quiz_uuid: String) -> bool {
+        self.quizes.push(quiz_uuid);
         return true;
     }
 

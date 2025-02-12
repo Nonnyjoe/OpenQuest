@@ -12,9 +12,9 @@ contract MyContract is CoprocessorAdapter {
         callCoprocessor(input);
     }
 
-    function handleNotice(bytes memory notice) internal override {
-        // Add logic for handling callback from co-processor containing notices.
-    }
+    // function handleNotice(bytes memory notice) internal override {
+    //     // Add logic for handling callback from co-processor containing notices.
+    // }
 
     // Add your other app logic here
 }

@@ -1,0 +1,6 @@
+@openzeppelin/contracts/=lib/Openzeppelin-contracts/contracts/
+Openzeppelin-contracts/=lib/Openzeppelin-contracts/
+coprocessor-base-contract/=lib/coprocessor-base-contract/src/
+erc4626-tests/=lib/Openzeppelin-contracts/lib/erc4626-tests/
+forge-std/=lib/forge-std/src/
+halmos-cheatcodes/=lib/Openzeppelin-contracts/lib/halmos-cheatcodes/src/

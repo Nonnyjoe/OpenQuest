@@ -12,6 +12,15 @@ use actix_web::{HttpRequest, HttpResponse};
 use serde::{Deserialize, Serialize};
 use std::env;
 
+macro_rules! try_or_return {
+    ($result:expr) => {
+        match $result {
+            Ok(value) => value,
+            Err(e) => return ApiResponse::new(e.error_code, e.message),
+        }
+    };
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SubmitCreateQuiz {
     name: String,
@@ -51,7 +60,20 @@ pub async fn create_quiz(
                         request.start_time.clone(),
                     );
                     match db.add_quiz(new_quiz.clone()).await {
-                        Ok(_) => ApiResponse::new(201, format!("{:?}", new_quiz.uuid)),
+                        Ok(_) => {
+                            let mut protocol = try_or_return!(
+                                db.get_protocol_via_name(request.protocol.clone()).await
+                            );
+                            protocol.update_total_expense(request.total_reward.clone());
+                            protocol.add_quiz(new_quiz.uuid.clone());
+                            match db.update_protocol(protocol.clone()).await {
+                                Ok(_result) => {
+                                    return ApiResponse::new(201, format!("{:?}", new_quiz.uuid));
+                                }
+                                Err(e) => ApiResponse::new(e.error_code, e.message),
+                            };
+                            ApiResponse::new(201, format!("{:?}", new_quiz.uuid))
+                        }
                         Err(e) => ApiResponse::new(e.error_code, e.message),
                     }
                 } else {

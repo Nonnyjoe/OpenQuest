@@ -55,10 +55,22 @@ pub struct QuizAnswer {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Participant {
     pub user_uuid: String,
+    pub wallet_address: String,
     pub score: i64,
     pub answered_questions: Vec<QuizAnswer>, // Question index and answer index
     pub submission_time: i64,
     pub start_time: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct QuizOffchainData {
+    pub uuid: String,
+    pub protocol: String,
+    pub num_questions: usize,
+    pub questions: Vec<Question>,
+    pub total_reward: f64,
+    pub max_reward_per_user: f64,
+    pub participants: Vec<Participant>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -73,13 +85,14 @@ pub struct Quiz {
     pub access: QuizAccess,
     pub total_reward: f64,
     pub max_reward_per_user: f64,
-    pub duration_in_minutes: i64,
+    pub duration_in_sec_timestamp: i64,
     pub start_time: i64,
     pub end_time: i64,
     pub created_at: i64,
     pub created_by: String,
     pub participants: Vec<Participant>,
     pub status: Status,
+    pub submited: bool,
 }
 
 impl Quiz {
@@ -94,7 +107,7 @@ impl Quiz {
         access: QuizAccess,
         total_reward: f64,
         max_reward_per_user: f64,
-        duration_in_minutes: i64,
+        duration_in_sec_timestamp: i64,
         start_time: i64,
     ) -> Self {
         Self {
@@ -109,18 +122,32 @@ impl Quiz {
             access,
             total_reward,
             max_reward_per_user,
-            duration_in_minutes,
+            duration_in_sec_timestamp,
             start_time,
-            end_time: start_time + duration_in_minutes,
+            end_time: start_time + duration_in_sec_timestamp,
             created_at: Utc::now().timestamp(),
             participants: Vec::new(),
             status: Status::Pending,
+            submited: false,
         }
     }
 
-    pub fn add_participant(&mut self, uuid: String) -> bool {
+    pub fn into_offchain_quiz_data(&self) -> QuizOffchainData {
+        QuizOffchainData {
+            uuid: self.uuid.clone(),
+            protocol: self.protocol.clone(),
+            num_questions: self.num_questions,
+            questions: self.questions.clone(),
+            total_reward: self.total_reward.clone(),
+            max_reward_per_user: self.max_reward_per_user.clone(),
+            participants: self.participants.clone(),
+        }
+    }
+
+    pub fn add_participant(&mut self, uuid: String, wallet_address: String) -> bool {
         self.participants.push(Participant {
             user_uuid: uuid,
+            wallet_address,
             score: 0,
             answered_questions: Vec::new(),
             submission_time: 0,

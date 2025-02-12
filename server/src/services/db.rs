@@ -203,6 +203,23 @@ impl Database {
         }
     }
 
+    pub async fn update_protocol(&self, protocol: Protocol) -> Result<Protocol, DatabaseResponse> {
+        let result = self
+            .quizes
+            .replace_one(doc! {"name": protocol.name.clone()}, protocol.clone())
+            .await;
+        match result {
+            Ok(update_result) => {
+                if update_result.modified_count == 0 {
+                    Err(DatabaseResponse::new(404, "Protocol not found".to_string()))
+                } else {
+                    Ok(protocol)
+                }
+            }
+            Err(e) => Err(DatabaseResponse::new(500, format!("{}", e))),
+        }
+    }
+
     pub async fn add_quiz(&self, quiz: Quiz) -> Result<InsertOneResult, DatabaseResponse> {
         match self.quizes.insert_one(quiz).await {
             Ok(result) => Ok(result),
@@ -267,6 +284,27 @@ impl Database {
                 }
             }
             Err(e) => Err(DatabaseResponse::new(500, format!("{}", e))),
+        }
+    }
+
+    pub async fn get_all_quizes(&self) -> Result<Vec<Quiz>, DatabaseResponse> {
+        let result = self.quizes.find(doc! {}).await;
+
+        match result {
+            Ok(mut cursor) => {
+                let mut quizes: Vec<Quiz> = Vec::new();
+                while let Ok(Some(quiz)) = cursor.try_next().await {
+                    quizes.push(quiz);
+                }
+                if quizes.is_empty() {
+                    return Err(DatabaseResponse::new(404, "No Quiz were found".to_string()));
+                }
+                Ok(quizes)
+            }
+            Err(e) => Err(DatabaseResponse::new(
+                500,
+                format!("{}, {}", "Error retrieving Quizes", e),
+            )),
         }
     }
 }

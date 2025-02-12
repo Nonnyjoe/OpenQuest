@@ -1,165 +1,142 @@
-// use alloy::primitives::{Address, U256};
-// use alloy::providers::{Http, Provider};
-// use alloy::signers::{LocalWallet, Signer};
-// use chrono::Utc;
-// use mongodb::{bson::doc, Client, Collection};
-// use serde::{Deserialize, Serialize};
-// use std::sync::Arc;
-// use tokio::time::{self, Duration};
+use super::db::Database;
+use crate::models::quiz_model::{Quiz, QuizAccess};
 
-// #[derive(Debug, Serialize, Deserialize, Clone)]
-// pub enum DifficultyLevel {
-//     Easy,
-//     Medium,
-//     Hard,
-// }
+use alloy::{network::EthereumWallet, providers::ProviderBuilder};
 
-// #[derive(Debug, Serialize, Deserialize, Clone)]
-// pub enum QuizAccess {
-//     Public,
-//     Private,
-// }
+use alloy_signer_local::PrivateKeySigner;
+use alloy_sol_types::sol;
 
-// #[derive(Debug, Serialize, Deserialize, Clone)]
-// pub struct Question {
-//     pub question_text: String,
-//     pub options: [String; 4],
-//     pub correct_answer: char,
-// }
+use bincode;
+use dotenv::dotenv;
+use mongodb::bson::doc;
+use serde::{Deserialize, Serialize};
+use std::env;
 
-// #[derive(Debug, Serialize, Deserialize, Clone)]
-// pub struct Participant {
-//     pub user_id: String,
-//     pub score: Option<u32>,
-// }
+use std::io::Cursor;
+use std::str::FromStr;
+use std::time::Duration;
+use tokio::time::sleep;
+use zstd::stream::{decode_all, encode_all};
 
-// #[derive(Debug, Serialize, Deserialize, Clone)]
-// pub enum Status {
-//     Pending,
-//     Active,
-//     Completed,
-// }
+sol!(
+    #[derive(Debug, Deserialize, Serialize)]
+    #[allow(missing_docs)]
+    #[sol(rpc)]
+    OPENQUEST,
+    "abi/QuizContractABI.json"
+);
 
-// #[derive(Debug, Serialize, Deserialize, Clone)]
-// pub struct Quiz {
-//     pub uuid: String,
-//     pub name: String,
-//     pub difficulty: DifficultyLevel,
-//     pub protocol: String,
-//     pub description: String,
-//     pub num_questions: usize,
-//     pub questions: Vec<Question>,
-//     pub access: QuizAccess,
-//     pub total_reward: f64,
-//     pub max_reward_per_user: f64,
-//     pub duration_in_minutes: i64,
-//     pub start_time: i64,
-//     pub end_time: i64,
-//     pub created_at: i64,
-//     pub created_by: String,
-//     pub participants: Vec<Participant>,
-//     pub status: Status,
-// }
+pub async fn check_and_submit_quizzes(db: Database) {
+    loop {
+        println!("Quiz Submitter Awake...");
 
-// pub struct QuizService {
-//     db: Collection<Quiz>,
-//     provider: Arc<Http>,
-//     wallet: LocalWallet,
-//     contract_address: Address,
-// }
+        let now = chrono::Utc::now().timestamp();
 
-// impl QuizService {
-//     pub async fn new(
-//         mongo_uri: &str,
-//         rpc_url: &str,
-//         private_key: &str,
-//         contract_address: &str,
-//     ) -> Self {
-//         let client = Client::with_uri_str(mongo_uri)
-//             .await
-//             .expect("Failed to connect to MongoDB");
-//         let db = client.database("quiz_db").collection::<Quiz>("quizzes");
+        let quizes = db.get_all_quizes().await.unwrap_or(Vec::new());
 
-//         let provider = Arc::new(Http::new(rpc_url).expect("Failed to create provider"));
-//         let wallet = private_key
-//             .parse::<LocalWallet>()
-//             .expect("Invalid private key");
-//         let contract_address = contract_address
-//             .parse::<Address>()
-//             .expect("Invalid contract address");
+        for mut quiz in quizes {
+            println!("Checking Quiz {}", quiz.uuid);
 
-//         Self {
-//             db,
-//             provider,
-//             wallet,
-//             contract_address,
-//         }
-//     }
+            if quiz.end_time <= now && quiz.submited == false {
+                // Send quiz to Solidity contract
+                send_quiz_to_contract(&quiz).await;
 
-//     /// Periodically checks for quizzes that should be submitted to the blockchain
-//     pub async fn start_quiz_submission(&self) {
-//         let mut interval = time::interval(Duration::from_secs(60)); // Check every minute
-//         loop {
-//             interval.tick().await;
-//             self.submit_eligible_quizzes().await;
-//         }
-//     }
+                // Update quiz status to Completed
+                quiz.submited = true;
+                match db.update_quiz(quiz.clone()).await {
+                    Ok(_result) => {
+                        println!("Quiz {} submitted successfully", quiz.uuid);
+                    }
+                    Err(err) => {
+                        println!("Error submitting quiz {}: {:?}", quiz.uuid, err);
+                    }
+                }
+            } else {
+                continue;
+            }
+        }
 
-//     /// Checks and submits quizzes whose start_time matches the current timestamp
-//     pub async fn submit_eligible_quizzes(&self) {
-//         let current_time = Utc::now().timestamp();
-//         let filter = doc! { "start_time": current_time, "status": "Pending" };
+        // Sleep for a while before checking again
+        println!("Quiz Submitter Resting for 3 Minutes...");
+        sleep(Duration::from_secs(180)).await;
+    }
+}
 
-//         match self.db.find(filter, None).await {
-//             Ok(mut cursor) => {
-//                 while let Some(quiz) = cursor.try_next().await.unwrap_or(None) {
-//                     if let Err(err) = self.submit_quiz_to_contract(quiz.clone()).await {
-//                         eprintln!("Error submitting quiz {}: {}", quiz.uuid, err);
-//                     } else {
-//                         // Update quiz status to Active
-//                         self.db
-//                             .update_one(
-//                                 doc! { "uuid": &quiz.uuid },
-//                                 doc! { "$set": { "status": "Active" } },
-//                                 None,
-//                             )
-//                             .await
-//                             .unwrap_or_else(|e| eprintln!("Failed to update quiz status: {}", e));
-//                     }
-//                 }
-//             }
-//             Err(e) => eprintln!("Error fetching eligible quizzes: {}", e),
-//         }
-//     }
+async fn send_quiz_to_contract(quiz: &Quiz) {
+    dotenv().ok();
+    let rpc = env::var("RPC").expect("RPC must be set");
+    let private_key = env::var("PRIVATE_KEY").expect("PRIVATE_KEY must be set");
+    let open_quest_factory_address =
+        env::var("OPENQUEST_FACTORY").expect("OPENQUEST_FACTORY must be set");
 
-//     /// Submits the quiz details to a Solidity contract using Alloy
-//     async fn submit_quiz_to_contract(&self, quiz: Quiz) -> Result<(), Box<dyn std::error::Error>> {
-//         let function_signature = "submitQuiz(string,uint256,uint256,uint256,uint256)";
-//         let data = alloy::abi::encode_packed(&[
-//             quiz.uuid.clone().into(),                    // string
-//             U256::from(quiz.total_reward as u64),        // total reward
-//             U256::from(quiz.max_reward_per_user as u64), // max per user
-//             U256::from(quiz.start_time),                 // start time
-//             U256::from(quiz.end_time),                   // end time
-//         ])?;
+    // Compress the quiz data for the Solidity contract
+    let compressed_quiz_data = compress_struct(&quiz.into_offchain_quiz_data());
+    let _sybmit_result = submit_quiz(
+        quiz.uuid.clone(),
+        quiz.name.clone(),
+        quiz.total_reward,
+        quiz.max_reward_per_user,
+        quiz.created_by.clone(),
+        quiz.protocol.clone(),
+        quiz.access.clone(),
+        compressed_quiz_data,
+        quiz.end_time,
+        &private_key,
+        &rpc,
+        open_quest_factory_address,
+    )
+    .await;
+}
 
-//         let tx =
-//             alloy::transactions::TypedTransaction::Legacy(alloy::transactions::TransactionLegacy {
-//                 nonce: None,
-//                 gas_price: Some(U256::from(10_000_000_000u64)), // Example gas price
-//                 gas_limit: U256::from(300_000u64),
-//                 to: Some(self.contract_address.into()),
-//                 value: U256::zero(),
-//                 data: data.into(),
-//             });
+fn compress_struct<T: Serialize>(data: &T) -> Vec<u8> {
+    let serialized = bincode::serialize(data).expect("Serialization failed");
+    encode_all(Cursor::new(serialized), 3).expect("Compression failed")
+}
 
-//         let signed_tx = self
-//             .wallet
-//             .sign_transaction(&tx, &self.provider.chain_id().await?)
-//             .await?;
-//         let tx_hash = self.provider.send_raw_transaction(signed_tx).await?;
+async fn submit_quiz(
+    uuid: String,
+    name: String,
+    total_reward: f64,
+    max_reward_per_user: f64,
+    created_by: String,
+    protocol: String,
+    access: QuizAccess,
+    compressed_data: Vec<u8>,
+    end_time: i64,
+    private_key: &str,
+    rpc_url: &str,
+    contract_address: String,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Create a signer from the private key
+    let signer = PrivateKeySigner::from_str(private_key)?;
 
-//         println!("Quiz {} submitted with TX hash: {:?}", quiz.uuid, tx_hash);
-//         Ok(())
-//     }
-// }
+    let wallet = EthereumWallet::from(signer.clone());
+
+    // Create a provider (e.g., HTTP provider)
+    let provider = ProviderBuilder::new()
+        .wallet(wallet)
+        .on_http(rpc_url.parse()?);
+
+    let open_quest = OPENQUEST::new(contract_address.parse()?, provider);
+
+    let tx_hash = open_quest
+        .gradeQuiz(
+            uuid.as_str().into(),
+            name.as_str().into(),
+            total_reward.try_into()?,
+            max_reward_per_user.try_into()?,
+            created_by.parse()?,
+            protocol.as_str().into(),
+            access.to_string().into(),
+            compressed_data.into(),
+            end_time.try_into()?,
+        )
+        .send()
+        .await?
+        .watch()
+        .await?;
+
+    println!("Transaction submitted: {:?}", tx_hash);
+
+    Ok(())
+}

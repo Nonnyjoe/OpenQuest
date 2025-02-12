@@ -12,11 +12,8 @@ use routes::{
     protocol_routes::{add_protocol_staff, get_all_protocols, register_protocol},
     user_routes::{get_all_users, link_wallet_address, login_user, register_user},
 };
-use services::db::Database;
-use services::quiz_service::QuizService;
+use services::{db::Database, quiz_services::check_and_submit_quizzes};
 use std::env;
-use std::sync::Arc;
-use tokio::task; // Import the QuizService
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -29,21 +26,14 @@ async fn main() -> std::io::Result<()> {
     let db = Database::init().await;
     let db_data = Data::new(db.clone());
     dotenv().ok();
-    let db_url = env::var("DB_URL").expect("DB_URL must be set");
-    let rpc = env::var("RPC").expect("RPC must be set");
-    let rpc = env::var("RPC").expect("RPC must be set");
-    let private_key = env::var("PRIVATE_KEY").expect("PRIVATE_KEY must be set");
-    let open_quest_factory_address =
-        env::var("OPENQUEST_FACTORY").expect("OPENQUEST_FACTORY must be set");
+    // let db_url = env::var("DB_URL").expect("DB_URL must be set");
 
-    // Initialize QuizService for background quiz submission
-    let quiz_service =
-        Arc::new(QuizService::new(db_url, rpc, private_key, open_quest_factory_address).await);
+    // Clone the database for the quiz submission task
+    let db_clone = db.clone();
 
-    // Spawn a new thread to check & submit quizzes in the background
-    let quiz_service_clone = quiz_service.clone();
-    task::spawn(async move {
-        quiz_service_clone.start_quiz_submission().await;
+    // Spawn a separate task for quiz submission
+    tokio::spawn(async move {
+        check_and_submit_quizzes(db_clone).await;
     });
 
     // Set server configurations

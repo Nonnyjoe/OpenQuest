@@ -53,9 +53,22 @@ pub async fn start_quiz(
                         }
                         Status::Pending => {
                             if quiz.start_time <= chrono::Utc::now().timestamp() {
+                                let user = db
+                                    .get_user_via_uuid(token_data.claims.user_uuid.clone())
+                                    .await
+                                    .unwrap();
+                                if user.wallet.wallet_address.clone().is_none() {
+                                    return ApiResponse::new(
+                                        400,
+                                        "User does not have a linked wallet address".to_string(),
+                                    );
+                                }
                                 let mut quiz_obj = quiz.clone();
                                 quiz_obj.status = Status::Ongoing;
-                                quiz_obj.add_participant(token_data.claims.user_uuid.clone());
+                                quiz_obj.add_participant(
+                                    token_data.claims.user_uuid.clone(),
+                                    user.wallet.wallet_address.clone().unwrap(),
+                                );
 
                                 try_or_return!(db.update_quiz(quiz_obj).await);
                                 return ApiResponse::new(
@@ -76,8 +89,22 @@ pub async fn start_quiz(
                             );
                         }
                         Status::Ongoing => {
+                            let user = db
+                                .get_user_via_uuid(token_data.claims.user_uuid.clone())
+                                .await
+                                .unwrap();
+                            if user.wallet.wallet_address.clone().is_none() {
+                                return ApiResponse::new(
+                                    400,
+                                    "User does not have a linked wallet address".to_string(),
+                                );
+                            }
                             let mut quiz_obj = quiz.clone();
-                            quiz_obj.add_participant(token_data.claims.user_uuid.clone());
+
+                            quiz_obj.add_participant(
+                                token_data.claims.user_uuid.clone(),
+                                user.wallet.wallet_address.clone().unwrap(),
+                            );
                             try_or_return!(db.update_quiz(quiz_obj).await);
                             return ApiResponse::new(200, "Quiz started successfully".to_string());
                         }
