@@ -3,8 +3,9 @@ pragma solidity ^0.8.13;
 
 import {Quest} from "./quest.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-contract Factory is Ownable{
+contract Factory is Ownable {
     address protocolVault;
     uint256 public totalDeployments;
     uint256 public totalQuiz;
@@ -18,6 +19,7 @@ contract Factory is Ownable{
     error InvalidTokenUri();
     error InvalidPrize();
     error InvalidTitle();
+    error TransferFailed();
 
     /////////       EVENTS      ////////////
     event QuizCreated(address indexed admin, uint256 time);
@@ -62,10 +64,27 @@ contract Factory is Ownable{
         if (trivium == Quest.Trivium.quiz) {
             totalQuiz++;
             totalDeployments++;
+
+            /// sent the prize money to vault
+            bool success = IERC20(token).transferFrom(
+                msg.sender,
+                child,
+                totalPrize
+            );
+            require(success, TransferFailed());
+
             emit QuizCreated(admin, block.timestamp);
         } else if (trivium == Quest.Trivium.hackathon) {
             totalHackathon++;
             totalDeployments++;
+            /// sent the prize money to vault
+            bool success = IERC20(token).transferFrom(
+                msg.sender,
+                child,
+                totalPrize
+            );
+            require(success, TransferFailed());
+
             emit HackathonCreated(admin, block.timestamp);
         }
 
@@ -73,5 +92,4 @@ contract Factory is Ownable{
     }
 
     receive() external payable {}
-
 }

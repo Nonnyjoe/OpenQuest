@@ -1,12 +1,17 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
+import {ICoprocessorAdapter} from "./ICoprocessorAdapter.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
+
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {QuestNft} from "./quest_nft.sol";
 
-contract Quest is Ownable {
-    QuestNft public questNft;
+contract Quest is Ownable, ERC1155 {
+    using SafeERC20 for IERC20;
+    address coprocessorAdapter = 0x05D032ac25d322df992303dCa074EE7392C117b9;
 
     address protocolVault;
     address[] public quizParticipants;
@@ -21,9 +26,15 @@ contract Quest is Ownable {
     Trivium public currentEventType;
 
     /// @notice Keeps track of scores of participants
-    mapping(address => uint256) public QuizScores;
+    mapping(uint256 => bytes) public QuizResults;
     /// @notice Tracks points gained per hacker
-    mapping(address => uint256) public HackathonPoint;
+    mapping(uint256 => bytes) public HackathonResults;
+    /// @notice maps participants to their scores
+    mapping(address => uint256) public scorePerParticipant;
+    /// protocol staff
+    mapping(address => bool) public protocolStaff;
+    /// To store URIs per user
+    mapping(uint256 => string) private _tokenURIs;
 
     struct Hackathon {
         string title;
@@ -53,11 +64,17 @@ contract Quest is Ownable {
     }
 
     /// EVENTS  ///
-    event QuizCreated(address indexed admin, uint256 time);
-    event HackathonCreated(address indexed admin, uint256 time);
     event ResponseSubmitted(address by, uint256 time);
-    event TriviaCanceled(address indexed admin, string memory reason, uint256 time);
+    event TriviaCanceled(address indexed admin, string reason, uint256 time);
+    event StaffAdded(address indexed admin, address staff, uint256 time);
+    event StaffRemoved(address indexed admin, address staff, uint256 time);
+    event RewardsDistributed(
+        address[] winners,
+        uint256 rewardPerWinner,
+        uint256 time
+    );
 
+    event TransferFailed(address indexed to, uint256 amount, bytes reason);
 
     /// ERRORS  ///
     error NotQuizAdmin();
@@ -70,9 +87,11 @@ contract Quest is Ownable {
     error HackathonNotActive();
     error QuizStillActive();
     error HackathonStillActive();
-    error TransferFailed();
     error InvalidAddress();
-
+    error UnauthorizedCaller();
+    error LengthMismatch();
+    error NotStaffMember();
+    error NoWinners();
     constructor(
         address admin,
         string memory tokenUri,
@@ -83,7 +102,7 @@ contract Quest is Ownable {
         address token,
         address vault,
         Trivium trivium
-    ) Ownable(admin) {
+    ) ERC1155(tokenUri) Ownable(admin) {
         protocolVault = vault;
 
         if (trivium == Trivium.quiz) {
@@ -98,13 +117,6 @@ contract Quest is Ownable {
                 published: false
             });
             currentEventType = Trivium.quiz;
-            bool success = IERC20(token).transferFrom(
-                msg.sender,
-                protocolVault,
-                bounty
-            );
-            require(success, TransferFailed());
-            emit QuizCreated(msg.sender, block.timestamp);
         }
         if (trivium == Trivium.hackathon) {
             hackathon = Hackathon({
@@ -118,17 +130,18 @@ contract Quest is Ownable {
                 token: token
             });
             currentEventType = Trivium.hackathon;
-            bool success = IERC20(token).transferFrom(
-                msg.sender,
-                protocolVault,
-                bounty
-            );
-            require(success, TransferFailed());
-            emit HackathonCreated(msg.sender, block.timestamp);
         }
     }
 
-    function publish() external onlyOwner {
+    modifier onlyOwnerOrStaff() {
+        require(
+            msg.sender == owner() || protocolStaff[msg.sender],
+            UnauthorizedCaller()
+        );
+        _;
+    }
+
+    function publish() external onlyOwnerOrStaff {
         if (currentEventType == Trivium.quiz) {
             quiz.published = true;
         } else if (currentEventType == Trivium.hackathon) {
@@ -136,57 +149,115 @@ contract Quest is Ownable {
         }
     }
 
-    function submitResponse(bytes memory quizData) external {
-       if (currentEventType == Trivium.quiz) {
-            require(quiz.published = true, QuizNotActive());
-        /// TODO
-
-        } else if (currentEventType == Trivium.hackathon) {
-            require(hackathon.published = true, HackathonNotActive());
-        /// TODO
-
-        }
-    }
-
-    function setWinners(address[] calldata winnerAddresses) external onlyOwner {
+    function submitResults(
+        bytes calldata data,
+        uint256 id
+    ) external onlyOwnerOrStaff {
         if (currentEventType == Trivium.quiz) {
-            if (block.timestamp <= quiz.stop) revert QuizStillActive();
-            for (uint i = 0; i < winnerAddresses.length; i++) {
-                quizWinners.push(winnerAddresses[i]);
-            }
-            /// TODO Pay winners
+            require(quiz.published == true, QuizNotActive());
+            QuizResults[id] = data;
         } else if (currentEventType == Trivium.hackathon) {
-            if (block.timestamp <= hackathon.stop)
-                revert HackathonStillActive();
-            for (uint i = 0; i < winnerAddresses.length; i++) {
-                hackathonWinners.push(winnerAddresses[i]);
-            /// TODO Pay winners
+            require(hackathon.published == true, HackathonNotActive());
+            HackathonResults[id] = data;
+        }
+
+        ICoprocessorAdapter(coprocessorAdapter).callCoprocessor(data);
+    }
+
+    /// @dev A callback for coprocessor after running calculations with the submitted results
+    function receiveCoprocessorResult(
+        address[] memory participants,
+        address[] memory winners,
+        uint256[] memory scores,
+        string[] memory tokenUris
+    ) external {
+        require(msg.sender == coprocessorAdapter, UnauthorizedCaller());
+        // Ensure the input arrays have the same length
+        require(participants.length == scores.length, LengthMismatch());
+
+        uint256 rewardPerWinner = (quiz.reward / winners.length);
+        address token = quiz.token;
+
+        if (currentEventType == Trivium.quiz) {
+            // add winners to quizWinners
+            require(winners.length > 0, NoWinners());
+            for (uint256 i = 0; i < winners.length; i++) {
+                quizWinners.push(winners[i]);
+                IERC20(token).safeTransfer(winners[i], rewardPerWinner);
+            }
+            emit RewardsDistributed(winners, rewardPerWinner, block.timestamp);
+
+            // Add participants to quizParticipants and map scores
+            for (uint256 i = 0; i < participants.length; i++) {
+                quizParticipants.push(participants[i]);
+                scorePerParticipant[participants[i]] = scores[i];
+                _mint(participants[i], i, 1, "");
+                _setTokenURI(i, tokenUris[i]);
+            }
+        } else if (currentEventType == Trivium.hackathon) {
+            for (uint256 i = 0; i < winners.length; i++) {
+                hackathonWinners.push(winners[i]);
+                /// TODO distribute rewards
+            }
+
+            for (uint256 i = 0; i < participants.length; i++) {
+                hackathonParticipants.push(participants[i]);
+                scorePerParticipant[participants[i]] = scores[i];
+                _mint(participants[i], i, 1, "");
+                _setTokenURI(i, tokenUris[i]);
             }
         }
     }
+
+    function addStaff(address staff) external onlyOwner {
+        require(staff != address(0), InvalidAddress());
+        protocolStaff[staff] = true;
+        emit StaffAdded(msg.sender, staff, block.timestamp);
+    }
+
+    function removeStaff(address staff) external onlyOwner {
+        require(protocolStaff[staff], NotStaffMember());
+        delete protocolStaff[staff];
+        emit StaffRemoved(msg.sender, staff, block.timestamp);
+    }
+
 
     function changeAdmin(address newAdmin) external onlyOwner {
         require(newAdmin != address(0), InvalidAddress());
         if (currentEventType == Trivium.quiz) {
             quiz.admin = newAdmin;
-            transferOwnership(newOwner);
+            transferOwnership(newAdmin);
         } else if (currentEventType == Trivium.hackathon) {
             hackathon.admin = newAdmin;
-            transferOwnership(newOwner);
+            transferOwnership(newAdmin);
         }
     }
 
-    function cancelTrivia(address recipient, string calldata reason) external onlyOwner {
+    function cancelTrivia(
+        address recipient,
+        string calldata reason
+    ) external onlyOwnerOrStaff {
         require(recipient != address(0), InvalidAddress());
         if (currentEventType == Trivium.quiz) {
             quiz.published = false;
-            IERC20(quiz.token).transferFrom(protocolVault, recipient, quiz.reward);
-            emit TriviaCanceled(admin, reason, block.timestamp);
+            IERC20(quiz.token).safeTransfer(recipient, quiz.reward);
+            emit TriviaCanceled(msg.sender, reason, block.timestamp);
         } else if (currentEventType == Trivium.hackathon) {
             hackathon.published = false;
-            IERC20(hackathon.token).transferFrom(protocolVault, recipient, hackathon.bounty);
-            emit TriviaCanceled(admin, reason, block.timestamp);
+            IERC20(hackathon.token).safeTransfer(recipient, hackathon.bounty);
+            emit TriviaCanceled(msg.sender, reason, block.timestamp);
         }
+    }
+
+    function uri(uint256 tokenId) public view override returns (string memory) {
+        require(bytes(_tokenURIs[tokenId]).length > 0, "URI not set");
+        return _tokenURIs[tokenId];
+    }
+
+    //////////      INTERNALS       ///////////
+
+    function _setTokenURI(uint256 tokenId, string memory newURI) internal {
+        _tokenURIs[tokenId] = newURI;
     }
 
     //////////      VIEW FUNCTIONS      //////////////////
@@ -198,6 +269,18 @@ contract Quest is Ownable {
     function getHackathon() external view returns (Hackathon memory) {
         require(hackathon.published, HackathonNotPublished());
         return hackathon;
+    }
+
+    function getScore(address account) external view returns (uint256) {
+        return scorePerParticipant[account];
+    }
+
+    function getQuizWinners() external view returns (address[] memory) {
+        return quizWinners;
+    }
+
+    function getHackathonWinners() external view returns (address[] memory) {
+        return hackathonWinners;
     }
 
     receive() external payable {}
