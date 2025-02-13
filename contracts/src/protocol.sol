@@ -10,26 +10,34 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 
-
-
-
 contract Protocol is Ownable, ERC1155, CoprocessorAdapter {
 
-    address rewardToken;
+    IERC20 rewardToken;
     ProtocolData protocol;
     address OpenQuest;
+    string [] public QuizIds;
+    address[] public ecosystemMembers;
 
 
     /// @notice maps a quizId to an address then finally to a hash of answers;
     mapping(string => mapping(address => SubmissionData)) public userQuizSubmission;
 
-    string [] public QuizIds;
+    mapping(address => uint256) public leaderboard;
 
     /// @notice maps a quizId to its compressed result bytes;
     mapping(string => Quiz) public quizDetails;
 
+    /// @notice maps a quizId to an array of participants addresses;
+    mapping(string => address[]) public quizparticipants;
+
+    /// @notice maps a protocol id to user address and finally to a bool indicating if he is a member of the protocol
+    mapping(string => mapping(address => uint256)) public usersQuizScore;
+
     /// @notice maps a quizId to its compressed result bytes;
     mapping(string => bytes) public compressedQuizResult;
+
+    /// @notice maps a compressed result bytes to its quizId;
+    mapping(bytes => string) public quizResultToQuizId;
 
     /// @notice maps a protocol id to user address and finally to his leaderboard score;
     mapping(string => mapping(address => uint256)) public leaderboardPoint;
@@ -86,6 +94,13 @@ contract Protocol is Ownable, ERC1155, CoprocessorAdapter {
         address admin;
     }
 
+    struct RewardData {
+        address userAddress;
+        uint256 rewardAmount;
+        uint256 leaderboardAddition;
+        uint256 quizScore;
+    }
+
         /// EVENTS  ///
     event ResponseSubmitted(address by, uint256 time);
     event TriviaCanceled(address indexed admin, string reason, uint256 time);
@@ -124,7 +139,7 @@ contract Protocol is Ownable, ERC1155, CoprocessorAdapter {
             contract_add: address(this),
             admin: admin
         });
-        rewardToken = reward_token;
+        rewardToken = IERC20(reward_token);
         OpenQuest = openQuest;
     }
 
@@ -174,6 +189,7 @@ contract Protocol is Ownable, ERC1155, CoprocessorAdapter {
         if (isQuizRegistered[quiz_id]) {
 
             compressedQuizResult[quiz_id] = compressed_data;
+            quizResultToQuizId[compressed_data] = quiz_id;
 
         } else {
             Quiz memory quiz = Quiz({
@@ -211,6 +227,7 @@ contract Protocol is Ownable, ERC1155, CoprocessorAdapter {
         });
 
         userQuizSubmission[quiz_id][msg.sender] = submission_data;
+        ecosystemMembers.push(msg.sender);
 
     }
 
@@ -261,4 +278,32 @@ contract Protocol is Ownable, ERC1155, CoprocessorAdapter {
 
 
     receive() external payable {}
+
+
+
+    function handleNotice(bytes32 payloadHash, bytes memory notice) internal override {
+        string memory quizId = quizResultToQuizId[abi.encodePacked(payloadHash)];
+
+        (string memory uuid, string memory _protocol, RewardData[] memory results) = abi.decode(
+            notice,
+            (string, string, RewardData[])
+        );
+
+        for (uint256 i = 0; i < results.length; i++) {
+            RewardData memory r = results[i];
+
+            if (r.rewardAmount != 0) {
+                rewardToken.transfer(r.userAddress, r.rewardAmount);
+            }
+
+            leaderboard[r.userAddress] += r.leaderboardAddition;
+
+            quizparticipants[uuid].push(r.userAddress);
+            usersQuizScore[uuid][r.userAddress] = r.quizScore;
+
+        }
+
+
+    }
+
 }

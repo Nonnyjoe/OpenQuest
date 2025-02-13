@@ -211,7 +211,17 @@ pub async fn handle_advance(
     let hex_encoded = hex::encode(bytes);
     println!("Hex-encoded bytes: 0x{}", hex_encoded);
 
-    // TODO: add application logic here
+    // Create a notice
+    let notice = object! { "payload" => hex_encoded };
+    let notice_request = hyper::Request::builder()
+        .method(hyper::Method::POST)
+        .uri(format!("{}/notice", server_addr))
+        .header("Content-Type", "application/json")
+        .body(hyper::Body::from(notice.dump()))?;
+
+    // Send the notice
+    let response = client.request(notice_request).await?;
+
     Ok("accept")
 }
 
