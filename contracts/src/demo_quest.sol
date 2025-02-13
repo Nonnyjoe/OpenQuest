@@ -4,11 +4,11 @@ pragma solidity ^0.8.13;
 // import {ICoprocessorAdapter} from "./ICoprocessorAdapter.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
-
+import "../lib/coprocessor-base-contract/src/CoprocessorAdapter.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-contract Quest is Ownable, ERC1155 {
+contract Quest is Ownable, ERC1155, CoprocessorAdapter {
     using SafeERC20 for IERC20;
 
     uint256 _tokenIdCounter;
@@ -118,7 +118,7 @@ contract Quest is Ownable, ERC1155 {
     error QuizStillActive();
     error HackathonStillActive();
     error InvalidAddress();
-    error UnauthorizedCaller();
+    error NewUnauthorizedCaller();
     error LengthMismatch();
     error NotStaffMember();
     error NoWinners();
@@ -127,59 +127,18 @@ contract Quest is Ownable, ERC1155 {
     constructor(
         address admin,
         string memory tokenUri,
-        string memory title,
-        uint256 start,
-        uint256 stop,
-        uint256 bounty,
-        address token,
-        address vault,
-        Trivium trivium
-    ) ERC1155(tokenUri) Ownable(admin) {
-        protocolVault = vault;
+        address _taskIssuerAddress, bytes32 _machineHash
+    ) ERC1155(tokenUri) Ownable(admin) CoprocessorAdapter(_taskIssuerAddress, _machineHash) {
 
-        // if (trivium == Trivium.quiz) {
-        //     quiz = Quiz({
-        //         admin: admin,
-        //         token: token,
-        //         title: title,
-        //         tokenUri: tokenUri,
-        //         start: start,
-        //         stop: stop,
-        //         reward: bounty,
-        //         published: false
-        //     });
-        //     currentEventType = Trivium.quiz;
-        // }
-        // if (trivium == Trivium.hackathon) {
-        //     hackathon = Hackathon({
-        //         title: title,
-        //         tokenUri: tokenUri,
-        //         start: start,
-        //         stop: stop,
-        //         bounty: bounty,
-        //         published: false,
-        //         admin: admin,
-        //         token: token
-        //     });
-        //     currentEventType = Trivium.hackathon;
-        // }
     }
 
     modifier onlyOwnerOrStaff() {
         require(
             msg.sender == owner() || protocolStaff[msg.sender],
-            UnauthorizedCaller()
+            NewUnauthorizedCaller()
         );
         _;
     }
-
-    // function publish() external onlyOwnerOrStaff {
-    //     if (currentEventType == Trivium.quiz) {
-    //         quiz.published = true;
-    //     } else if (currentEventType == Trivium.hackathon) {
-    //         hackathon.published = true;
-    //     }
-    // }
 
 
     function gradeQuiz(
@@ -234,7 +193,7 @@ contract Quest is Ownable, ERC1155 {
         uint256[] memory scores,
         string[] memory tokenUris
     ) external {
-        require(msg.sender == coprocessorAdapter, UnauthorizedCaller());
+        require(msg.sender == coprocessorAdapter, NewUnauthorizedCaller());
         // Ensure the input arrays have the same length
         require(scores.length == participants.length, LengthMismatch());
         require(tokenUris.length == participants.length, LengthMismatch());
