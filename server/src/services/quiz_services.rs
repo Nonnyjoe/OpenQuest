@@ -31,6 +31,7 @@ pub async fn check_and_submit_quizzes(db: Database) {
         println!("Quiz Submitter Awake...");
 
         let now = chrono::Utc::now().timestamp();
+        println!("current time: {}", now);
 
         let quizes = db.get_all_quizes().await.unwrap_or(Vec::new());
 
@@ -39,18 +40,22 @@ pub async fn check_and_submit_quizzes(db: Database) {
 
             if quiz.end_time <= now && quiz.submited == false {
                 // Send quiz to Solidity contract
-                send_quiz_to_contract(&quiz).await;
+                match send_quiz_to_contract(&quiz).await {
+                    true => {
+                        quiz.submited = true;
+                        match db.update_quiz(quiz.clone()).await {
+                            Ok(_result) => {
+                                println!("Quiz {} submitted successfully", quiz.uuid);
+                            }
+                            Err(err) => {
+                                println!("Error submitting quiz {}: {:?}", quiz.uuid, err);
+                            }
+                        }
+                    }
+                    false => {}
+                }
 
                 // Update quiz status to Completed
-                quiz.submited = true;
-                match db.update_quiz(quiz.clone()).await {
-                    Ok(_result) => {
-                        println!("Quiz {} submitted successfully", quiz.uuid);
-                    }
-                    Err(err) => {
-                        println!("Error submitting quiz {}: {:?}", quiz.uuid, err);
-                    }
-                }
             } else {
                 continue;
             }
@@ -62,7 +67,7 @@ pub async fn check_and_submit_quizzes(db: Database) {
     }
 }
 
-async fn send_quiz_to_contract(quiz: &Quiz) {
+async fn send_quiz_to_contract(quiz: &Quiz) -> bool {
     dotenv().ok();
     let rpc = env::var("RPC").expect("RPC must be set");
     let private_key = env::var("PRIVATE_KEY").expect("PRIVATE_KEY must be set");
@@ -71,7 +76,7 @@ async fn send_quiz_to_contract(quiz: &Quiz) {
 
     // Compress the quiz data for the Solidity contract
     let compressed_quiz_data = compress_struct(&quiz.into_offchain_quiz_data());
-    let _sybmit_result = submit_quiz(
+    let submit_result = submit_quiz(
         quiz.uuid.clone(),
         quiz.name.clone(),
         quiz.total_reward,
@@ -86,6 +91,19 @@ async fn send_quiz_to_contract(quiz: &Quiz) {
         open_quest_factory_address,
     )
     .await;
+
+    match submit_result {
+        Ok(_) => {
+            println!("Successful submission");
+            return true;
+        }
+        Err(err) => {
+            println!("Error submitting quiz: {:?}", err);
+            return false;
+        }
+    }
+
+    // println!("Successful submission with txid: {}", txid);
 }
 
 fn compress_struct<T: Serialize>(data: &T) -> Vec<u8> {

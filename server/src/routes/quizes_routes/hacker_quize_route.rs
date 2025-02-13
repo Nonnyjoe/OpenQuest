@@ -31,7 +31,7 @@ macro_rules! try_or_return {
     };
 }
 
-#[post("quize/join")]
+#[post("quiz/join")]
 pub async fn start_quiz(
     db: Data<Database>,
     request: Json<SubmitStartQuiz>,
@@ -53,6 +53,12 @@ pub async fn start_quiz(
                         }
                         Status::Pending => {
                             if quiz.start_time <= chrono::Utc::now().timestamp() {
+                                if quiz.end_time < chrono::Utc::now().timestamp() {
+                                    return ApiResponse::new(
+                                        400,
+                                        "Submission period exceeded".to_string(),
+                                    );
+                                }
                                 let user = db
                                     .get_user_via_uuid(token_data.claims.user_uuid.clone())
                                     .await

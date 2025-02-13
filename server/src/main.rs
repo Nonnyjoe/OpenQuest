@@ -10,6 +10,10 @@ use dotenv::dotenv;
 use routes::{
     health_routes::health_check,
     protocol_routes::{add_protocol_staff, get_all_protocols, register_protocol},
+    quizes_routes::{
+        hacker_quize_route::{start_quiz, submit_quiz},
+        protocol_quiz_route::create_quiz,
+    },
     user_routes::{get_all_users, link_wallet_address, login_user, register_user},
 };
 use services::{db::Database, quiz_services::check_and_submit_quizzes};
@@ -57,6 +61,9 @@ async fn main() -> std::io::Result<()> {
             .service(register_protocol)
             .service(get_all_protocols)
             .service(add_protocol_staff)
+            .service(create_quiz)
+            .service(start_quiz)
+            .service(submit_quiz)
     })
     .bind((server_url, port))?
     .run()

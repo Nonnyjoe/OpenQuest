@@ -205,7 +205,7 @@ impl Database {
 
     pub async fn update_protocol(&self, protocol: Protocol) -> Result<Protocol, DatabaseResponse> {
         let result = self
-            .quizes
+            .protocols
             .replace_one(doc! {"name": protocol.name.clone()}, protocol.clone())
             .await;
         match result {

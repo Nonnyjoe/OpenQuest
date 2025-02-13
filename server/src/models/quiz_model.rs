@@ -10,6 +10,13 @@ pub enum QuizAccess {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub enum RewardType {
+    DistributedByRankToTopFive,
+    DistributedEqullyToTopFive,
+    DistributedByLottery,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum DifficultyLevel {
     Easy,
     Medium,
@@ -60,6 +67,7 @@ pub struct Participant {
     pub answered_questions: Vec<QuizAnswer>, // Question index and answer index
     pub submission_time: i64,
     pub start_time: i64,
+    pub reward: f64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -71,6 +79,8 @@ pub struct QuizOffchainData {
     pub total_reward: f64,
     pub max_reward_per_user: f64,
     pub participants: Vec<Participant>,
+    pub reward_type: RewardType,
+    pub difficulty: DifficultyLevel,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -93,6 +103,7 @@ pub struct Quiz {
     pub participants: Vec<Participant>,
     pub status: Status,
     pub submited: bool,
+    pub reward_type: RewardType,
 }
 
 impl Quiz {
@@ -109,6 +120,7 @@ impl Quiz {
         max_reward_per_user: f64,
         duration_in_sec_timestamp: i64,
         start_time: i64,
+        reward_type: RewardType,
     ) -> Self {
         Self {
             uuid: Uuid::new_v4().to_string(),
@@ -129,6 +141,7 @@ impl Quiz {
             participants: Vec::new(),
             status: Status::Pending,
             submited: false,
+            reward_type,
         }
     }
 
@@ -141,6 +154,8 @@ impl Quiz {
             total_reward: self.total_reward.clone(),
             max_reward_per_user: self.max_reward_per_user.clone(),
             participants: self.participants.clone(),
+            reward_type: self.reward_type.clone(),
+            difficulty: self.difficulty.clone(),
         }
     }
 
@@ -152,6 +167,7 @@ impl Quiz {
             answered_questions: Vec::new(),
             submission_time: 0,
             start_time: Utc::now().timestamp(),
+            reward: 0.0,
         });
         return true;
     }
@@ -212,6 +228,24 @@ impl QuizAccess {
     }
 }
 
+impl RewardType {
+    pub fn to_string(&self) -> &'static str {
+        match self {
+            RewardType::DistributedByRankToTopFive => "DistributedByRankToTopFive",
+            RewardType::DistributedEqullyToTopFive => "DistributedEqullyToTopFive",
+            RewardType::DistributedByLottery => "DistributedByLottery",
+        }
+    }
+    pub fn from_str(value: &str) -> Option<RewardType> {
+        match value.to_lowercase().as_str() {
+            "distributed_by_rank" => Some(RewardType::DistributedByRankToTopFive),
+            "distributed_equally" => Some(RewardType::DistributedEqullyToTopFive),
+            "distributed_by_lottery" => Some(RewardType::DistributedByLottery),
+            _ => None,
+        }
+    }
+}
+
 impl DifficultyLevel {
     pub fn to_string(&self) -> &'static str {
         match self {
@@ -221,10 +255,10 @@ impl DifficultyLevel {
         }
     }
     pub fn from_str(value: &str) -> Option<DifficultyLevel> {
-        match value {
-            "Easy" => Some(DifficultyLevel::Easy),
-            "Medium" => Some(DifficultyLevel::Medium),
-            "Hard" => Some(DifficultyLevel::Hard),
+        match value.to_lowercase().as_str() {
+            "easy" => Some(DifficultyLevel::Easy),
+            "medium" => Some(DifficultyLevel::Medium),
+            "hard" => Some(DifficultyLevel::Hard),
             _ => None,
         }
     }
@@ -241,11 +275,11 @@ impl OptionIndex {
     }
 
     pub fn from_str(value: &str) -> Option<OptionIndex> {
-        match value {
-            "A" => Some(OptionIndex::A),
-            "B" => Some(OptionIndex::B),
-            "C" => Some(OptionIndex::C),
-            "D" => Some(OptionIndex::D),
+        match value.to_lowercase().as_str() {
+            "a" => Some(OptionIndex::A),
+            "b" => Some(OptionIndex::B),
+            "c" => Some(OptionIndex::C),
+            "d" => Some(OptionIndex::D),
             _ => None,
         }
     }

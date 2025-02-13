@@ -1,5 +1,5 @@
 use crate::models::protocol_model::Protocol;
-use crate::models::quiz_model::{DifficultyLevel, Question, Quiz, QuizAccess};
+use crate::models::quiz_model::{DifficultyLevel, Question, Quiz, QuizAccess, RewardType};
 use crate::services::db::Database;
 use crate::utils::jwt::is_valid_token;
 use crate::utils::{api_response::ApiResponse, jwt::decode_token};
@@ -31,8 +31,9 @@ pub struct SubmitCreateQuiz {
     access: String,
     total_reward: f64,
     max_reward_per_user: f64,
-    duration_in_minutes: i64,
+    duration_in_sec_timestamp: i64,
     start_time: i64,
+    reward_type: String,
 }
 
 #[post("quiz/create")]
@@ -56,8 +57,9 @@ pub async fn create_quiz(
                         QuizAccess::from_str(&request.access.clone()).unwrap(),
                         request.total_reward.clone(),
                         request.max_reward_per_user.clone(),
-                        request.duration_in_minutes.clone(),
+                        request.duration_in_sec_timestamp.clone(),
                         request.start_time.clone(),
+                        RewardType::from_str(request.reward_type.clone().as_str()).unwrap(),
                     );
                     match db.add_quiz(new_quiz.clone()).await {
                         Ok(_) => {
