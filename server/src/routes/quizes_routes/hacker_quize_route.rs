@@ -126,7 +126,7 @@ pub async fn start_quiz(
     }
 }
 
-#[post("quize/submit")]
+#[post("quiz/submit")]
 pub async fn submit_quiz(
     db: Data<Database>,
     request: Json<SubmitSubmitQuiz>,

@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Protocol {
+    pub protocol_uuid: String,
     pub name: String,
     pub staffs: Vec<String>,
     pub protocol_users: Vec<ProtocolUsers>,
@@ -9,6 +11,7 @@ pub struct Protocol {
     pub created_by: String,
     pub quizes: Vec<String>,
     pub total_expense: f64,
+    pub contract_address: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -20,6 +23,7 @@ pub struct ProtocolUsers {
 impl Protocol {
     pub fn new(name: String, creator_uuid: String) -> Protocol {
         Protocol {
+            protocol_uuid: Uuid::new_v4().to_string(),
             name,
             staffs: Vec::new(),
             protocol_users: Vec::new(),
@@ -27,6 +31,7 @@ impl Protocol {
             created_by: creator_uuid,
             total_expense: 0.0,
             quizes: Vec::new(),
+            contract_address: String::from(" "),
         }
     }
 

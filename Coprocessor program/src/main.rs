@@ -1,4 +1,5 @@
 use base64::decode as base64_decode;
+use bincode;
 use hex;
 use json::{object, JsonValue};
 use rand::seq::SliceRandom;
@@ -155,10 +156,10 @@ pub async fn handle_advance(
         .ok_or("Missing caller")?;
 
     println!("caller is {}", msg_sender);
-    let time_stamp: u128 = (request["data"]["metadata"]["timestamp"])
-        .to_string()
-        .parse::<u128>()
-        .expect("Invalid timestamp");
+    // let time_stamp: u128 = (request["data"]["metadata"]["timestamp"])
+    //     .to_string()
+    //     .parse::<u128>()
+    //     .expect("Invalid timestamp");
 
     let modified_string = remove_first_two_chars(&_payload);
     println!("payload without unnecesary content is: {}", modified_string);
@@ -215,12 +216,12 @@ pub async fn handle_advance(
     let notice = object! { "payload" => hex_encoded };
     let notice_request = hyper::Request::builder()
         .method(hyper::Method::POST)
-        .uri(format!("{}/notice", server_addr))
+        .uri(format!("{}/notice", _server_addr))
         .header("Content-Type", "application/json")
         .body(hyper::Body::from(notice.dump()))?;
 
     // Send the notice
-    let response = client.request(notice_request).await?;
+    let response = _client.request(notice_request).await?;
 
     Ok("accept")
 }
@@ -404,15 +405,11 @@ fn calculate_reward_distribution(
 }
 
 fn decompress_data(compressed: &str) -> QuizOffchainData {
-    // Decode from base64 string to bytes
-    let compressed_bytes = base64_decode(compressed).expect("Invalid base64 input");
+    let bytes = hex::decode(compressed).expect("Failed to decode hex");
 
-    // Decompress bytes
-    let mut decompressed = String::new();
-    let decompressed_bytes =
-        decode_all(Cursor::new(compressed_bytes)).expect("Decompression failed");
+    println!("serialiszed data: {:?}", bytes);
 
-    let quiz: QuizOffchainData = serde_json::from_str(&decompressed).expect("Failed to parse JSON");
+    let quiz: QuizOffchainData = bincode::deserialize(&bytes).expect("Deserialization failed");
     return quiz;
 }
 

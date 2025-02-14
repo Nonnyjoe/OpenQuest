@@ -1,2 +1,7 @@
 .cartesi
 target
+./output.car
+.car
+.cid
+.size
+.car.json

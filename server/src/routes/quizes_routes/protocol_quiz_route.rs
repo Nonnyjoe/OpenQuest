@@ -33,7 +33,7 @@ pub struct SubmitCreateQuiz {
     max_reward_per_user: f64,
     duration_in_sec_timestamp: i64,
     start_time: i64,
-    reward_type: String,
+    reward_type: RewardType,
 }
 
 #[post("quiz/create")]
@@ -59,8 +59,9 @@ pub async fn create_quiz(
                         request.max_reward_per_user.clone(),
                         request.duration_in_sec_timestamp.clone(),
                         request.start_time.clone(),
-                        RewardType::from_str(request.reward_type.clone().as_str()).unwrap(),
+                        request.reward_type.clone(),
                     );
+
                     match db.add_quiz(new_quiz.clone()).await {
                         Ok(_) => {
                             let mut protocol = try_or_return!(

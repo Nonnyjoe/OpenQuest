@@ -1,0 +1,13 @@
+cast send 0xC7f2Cf4845C6db0e1a1e91ED41Bcd0FcC1b0E141 "gradeQuiz(string,string,uint256,uint256,address,string,string,bytes,uint256)" \
+    "quiz123" \
+    "Test Quiz" \
+    1000000000000000000 \
+    500000000000000000 \
+    0x1234567890abcdef1234567890abcdef12345678 \
+    "OpenQuest" \
+    "public" \
+    $(cast abi-encode "bytes" "0xdeadbeef") \
+    1700000000 \
+    --from 0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266 \
+    --rpc-url http://localhost:8545 \
+    --private-key 0xabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabc1

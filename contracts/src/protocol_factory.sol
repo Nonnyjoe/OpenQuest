@@ -13,6 +13,7 @@ contract Factory is Ownable {
 
     address[] public childProtocols;
     mapping(string => ProtocolData) public idToProtocolData;
+    mapping(bytes32 => address) public nameToProtocolAddress;
     address public rewardToken;
 
     struct ProtocolData {
@@ -59,8 +60,9 @@ contract Factory is Ownable {
         childProtocols.push(protocol_data.contract_add);
         idToProtocolData[protocol_id] = protocol_data;
 
+        nameToProtocolAddress[keccak256(abi.encode(name))] = protocol; 
 
-        emit PtotocolCreated(msg.sender, block.timestamp, protocol_data.protocol_id, protocol_data.contract_add);
+        emit PtotocolCreated(msg.sender, block.timestamp, protocol_id, protocol);
         return protocol_data.contract_add;
 
     }
@@ -76,5 +78,8 @@ contract Factory is Ownable {
 
     }
 
+    function getProtocolAddress(string memory name) external view returns (address) {
+        return nameToProtocolAddress[keccak256(abi.encode(name))];
+    }
 
 }

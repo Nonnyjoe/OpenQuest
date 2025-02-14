@@ -1,5 +1,5 @@
 use crate::models::protocol_model::Protocol;
-use crate::services::db::Database;
+use crate::services::{db::Database, quiz_services::createProtocolOnchain};
 use crate::utils::jwt::is_valid_token;
 use crate::utils::{api_response::ApiResponse, jwt::decode_token};
 use actix_web::{
@@ -38,11 +38,18 @@ pub async fn register_protocol(
                         Ok(_) => ApiResponse::new(409, "Protocol already registered".to_string()),
                         Err(e) => match e.error_code {
                             404 => {
-                                let protocol = Protocol::new(
+                                let mut protocol = Protocol::new(
                                     request.name.clone(),
                                     token_data.claims.user_uuid.clone(),
                                 );
-
+                                let result = createProtocolOnchain(
+                                    request.name.clone(),
+                                    protocol.protocol_uuid.clone(),
+                                )
+                                .await;
+                                if let Ok(address) = result {
+                                    protocol.contract_address = address;
+                                };
                                 match db.create_protocol(protocol.clone()).await {
                                     Ok(_result) => {
                                         return ApiResponse::new(

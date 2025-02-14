@@ -4,13 +4,12 @@ pragma solidity ^0.8.13;
 import "../lib/coprocessor-base-contract/src/CoprocessorAdapter.sol";
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
+import "forge-std/Script.sol";
 
-contract Protocol is Ownable, ERC1155, CoprocessorAdapter {
+contract Protocol is Ownable, CoprocessorAdapter, Script {
 
     IERC20 rewardToken;
     ProtocolData protocol;
@@ -113,6 +112,7 @@ contract Protocol is Ownable, ERC1155, CoprocessorAdapter {
         uint256 rewardPerWinner,
         uint256 time
     );
+    event GradeQuiz(bytes data);
 
 
     /// ERRORS  ///
@@ -132,7 +132,7 @@ contract Protocol is Ownable, ERC1155, CoprocessorAdapter {
     }
 
 
-    constructor (string memory name, string memory protocolId, address reward_token, address admin, address openQuest, address _taskIssuerAddress, bytes32 _machineHash) ERC1155(" ") Ownable(admin) CoprocessorAdapter(_taskIssuerAddress, _machineHash) {
+    constructor (string memory name, string memory protocolId, address reward_token, address admin, address openQuest, address _taskIssuerAddress, bytes32 _machineHash) Ownable(admin) CoprocessorAdapter(_taskIssuerAddress, _machineHash) {
         protocol = ProtocolData({
             name: name,
             protocol_id: protocolId,
@@ -213,6 +213,10 @@ contract Protocol is Ownable, ERC1155, CoprocessorAdapter {
 
         // Call Coprocessor with the compressed_data
         callCoprocessor(compressed_data);
+        console.log("Child Protocol contract deployed at:", msg.sender);
+        
+        emit GradeQuiz(compressed_data);
+
 
     }
 
@@ -249,11 +253,6 @@ contract Protocol is Ownable, ERC1155, CoprocessorAdapter {
         transferOwnership(newAdmin);
     }
 
-
-    function uri(uint256 tokenId) public view override returns (string memory) {
-        require(bytes(_tokenURIs[tokenId]).length > 0, "URI not set");
-        return _tokenURIs[tokenId];
-    }
 
     //////////      INTERNALS       ///////////
 
