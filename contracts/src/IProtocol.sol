@@ -17,5 +17,6 @@ interface IProtocol {
     function computationSent(bytes32) external view returns (bool);
     function demoHandleNotice(bytes32 payloadHash, bytes memory notice) external ;
     function checkQuizResponse(bytes32 paloadHash) external view returns (bytes memory);
+    function owner( ) external view returns (address);
 }
     

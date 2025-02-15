@@ -5,3 +5,5 @@ target
 .cid
 .size
 .car.json
+/output.car
+output.car

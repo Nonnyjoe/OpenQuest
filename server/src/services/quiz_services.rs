@@ -231,6 +231,7 @@ pub async fn createProtocolOnchain(
         .await?;
 
     let receipt = provider.get_transaction_receipt(tx_hash).await?.unwrap();
+    println!("RECIPT DATA IS: {:?}", receipt);
 
     let log = receipt.inner.logs()[1].inner.data.topics()[3];
     let address_bytes = &log.as_slice()[12..32];
