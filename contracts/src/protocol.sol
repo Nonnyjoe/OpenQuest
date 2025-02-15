@@ -194,7 +194,7 @@ contract Protocol is Ownable, CoprocessorAdapter, Script {
         string memory access,
         bytes memory compressed_data,
         uint256 endTime
-     ) external onlyOwnerOrStaff {
+     ) external  {
 
         if (isQuizRegistered[quiz_id]) {
 
@@ -223,7 +223,7 @@ contract Protocol is Ownable, CoprocessorAdapter, Script {
 
         // Call Coprocessor with the compressed_data
         callCoprocessor(compressed_data);
-        console.log("Child Protocol contract deployed at:", msg.sender);
+
         
         emit GradeQuiz(compressed_data);
 
