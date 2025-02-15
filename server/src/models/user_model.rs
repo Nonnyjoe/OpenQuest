@@ -1,3 +1,5 @@
+use std::{collections::HashMap, string};
+
 use serde::{Deserialize, Serialize};
 // use std::error::Error;
 // use sha2::digest::Update;
@@ -12,6 +14,16 @@ pub struct User {
     pub wallet: Wallet,
     pub password: Password,
     pub created_at: String,
+    pub total_reward: f64,
+    pub quizes: Vec<QuizResult>,
+    pub leaderboard_score: HashMap<String, f64>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct QuizResult {
+    pub quiz_uuid: String,
+    pub score: f64,
+    pub reward: f64,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -59,7 +71,32 @@ impl User {
             wallet,
             password: password_struct,
             created_at,
+            total_reward: 0.0,
+            quizes: Vec::new(),
+            leaderboard_score: HashMap::new(),
         })
+    }
+
+    pub fn update_leader_board_point(
+        &mut self,
+        protocol_name: String,
+        leaderboard_score: f64,
+    ) -> Result<Self, String> {
+        if let Some(score) = self
+            .leaderboard_score
+            .get_mut(&protocol_name.to_lowercase())
+        {
+            *score += leaderboard_score;
+        } else {
+            self.leaderboard_score
+                .insert(protocol_name.to_uppercase(), leaderboard_score);
+        }
+        return Ok(self.clone());
+    }
+
+    pub fn update_total_reward(&mut self, reward: f64) -> Result<Self, String> {
+        self.total_reward += reward;
+        return Ok(self.clone());
     }
 
     pub fn display(&self) -> SimpleUserStruct {
@@ -68,6 +105,14 @@ impl User {
             user_name: self.user_name.clone(),
             email: self.email.email.clone(),
             wallet_address: self.wallet.wallet_address.clone(),
+        }
+    }
+
+    pub fn view_user_leaderboard(&self, protocol_name: String) -> Result<f64, String> {
+        if let Some(score) = self.leaderboard_score.get(&protocol_name.to_lowercase()) {
+            return Ok(*score);
+        } else {
+            return Ok(0.0);
         }
     }
 

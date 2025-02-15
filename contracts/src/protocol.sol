@@ -38,6 +38,9 @@ contract Protocol is Ownable, CoprocessorAdapter, Script {
     /// @notice maps a compressed result bytes to its quizId;
     mapping(bytes => string) public quizResultToQuizId;
 
+        /// @notice maps a 
+    mapping(bytes32 => bytes) public quizResponse;
+
     /// @notice maps a protocol id to user address and finally to his leaderboard score;
     mapping(string => mapping(address => uint256)) public leaderboardPoint;
 
@@ -94,11 +97,17 @@ contract Protocol is Ownable, CoprocessorAdapter, Script {
     }
 
     struct RewardData {
-        address userAddress;
+        string userAddress;
         uint256 rewardAmount;
         uint256 leaderboardAddition;
         uint256 quizScore;
     }
+
+    struct QuizResponse {
+    string uuid;
+    string protocol;
+    RewardData[] results;
+}
 
         /// EVENTS  ///
     event ResponseSubmitted(address by, uint256 time);
@@ -113,6 +122,7 @@ contract Protocol is Ownable, CoprocessorAdapter, Script {
         uint256 time
     );
     event GradeQuiz(bytes data);
+    event ResultReceived(bytes data);
 
 
     /// ERRORS  ///
@@ -262,10 +272,13 @@ contract Protocol is Ownable, CoprocessorAdapter, Script {
     }
 
     //////////      VIEW FUNCTIONS      //////////////////
-    // function getQuiz() external view returns (Quiz memory) {
-    //     // require(quiz.published, QuizNotPublished());
-    //     // return quiz;
-    // }
+    function checkQuizIsRegistered(string memory quiz_id) external view returns (bool) {
+        return isQuizRegistered[quiz_id];
+    }
+
+    function checkQuizResponse(bytes32 paloadHash) public view returns (bytes memory) {
+        return quizResponse[paloadHash];
+    }
 
     // function getScore(address account) external view returns (uint256) {
     //     return scorePerParticipant[account];
@@ -281,26 +294,69 @@ contract Protocol is Ownable, CoprocessorAdapter, Script {
 
 
     function handleNotice(bytes32 payloadHash, bytes memory notice) internal override {
-        string memory quizId = quizResultToQuizId[abi.encodePacked(payloadHash)];
+        quizResponse[payloadHash] = notice;
+        // string memory quizId = quizResultToQuizId[abi.encodePacked(payloadHash)];
 
-        (string memory uuid, string memory _protocol, RewardData[] memory results) = abi.decode(
-            notice,
-            (string, string, RewardData[])
-        );
+        // (string memory uuid, string memory _protocol, RewardData[] memory results) = abi.decode(
+        //     notice,
+        //     (string, string, RewardData[])
+        // );
 
-        for (uint256 i = 0; i < results.length; i++) {
-            RewardData memory r = results[i];
+        // for (uint256 i = 0; i < results.length; i++) {
+        //     RewardData memory r = results[i];
 
-            if (r.rewardAmount != 0) {
-                rewardToken.transfer(r.userAddress, r.rewardAmount);
-            }
+        //     // if (r.rewardAmount != 0) {
+        //     //     rewardToken.transfer(r.userAddress, r.rewardAmount);
+        //     // }
 
-            leaderboard[r.userAddress] += r.leaderboardAddition;
+        //     leaderboard[r.userAddress] += r.leaderboardAddition;
 
-            quizparticipants[uuid].push(r.userAddress);
-            usersQuizScore[uuid][r.userAddress] = r.quizScore;
+        //     quizparticipants[uuid].push(r.userAddress);
+        //     usersQuizScore[uuid][r.userAddress] = r.quizScore;
 
+        // }
+
+        emit ResultReceived(notice);
+        
+
+    }
+
+        function demoHandleNotice(bytes32 payloadHash, bytes calldata notice) public {
+        // Decode the top-level tuple (uuid, protocol, results)
+            quizResponse[payloadHash] = notice;
+            // console.log("test location");
+        // RewardData[] memory results = new RewardData[](encodedResults.length);
+
+        // Decode each RewardData tuple inside the results array
+        // for (uint i = 0; i < encodedResults.length; i++) {
+        //     (string memory user_address, bytes memory reward_amount_bytes, bytes memory leader_boar_addition_bytes, bytes memory quiz_score_bytes) = abi.decode(encodedResults[i], (string, bytes, bytes, bytes));
+            
+        //     // Convert bytes to uint256 for amounts and scores
+        //     uint256 reward_amount = toUint256(reward_amount_bytes);
+        //     uint256 leader_boar_addition = toUint256(leader_boar_addition_bytes);
+        //     uint256 quiz_score = toUint256(quiz_score_bytes);
+
+        //     results[i] = RewardData((user_address), reward_amount, leader_boar_addition, quiz_score);
+        // }
+
+        // return (uuid, protocol);
+
+    }
+
+    
+    function toUint256(bytes memory b) internal pure returns (uint256) {
+        require(b.length <= 32, "Invalid bytes length");
+        uint256 number;
+        for (uint i = 0; i < b.length; i++) {
+            number = number * 256 + uint8(b[i]);
         }
+    //     return number;
+
+        // require(notice.length <= 0xffff, "Data too large for EVM memory.");
+        // (uuid, protocol ) = abi.decode(notice, (string, string));
+        // console.log(uuid);
+        // console.log(protocol);
+        // return (uuid, protocol);
 
 
     }

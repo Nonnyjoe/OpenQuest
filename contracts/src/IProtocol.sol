@@ -11,5 +11,11 @@ interface IProtocol {
         bytes memory compressed_data,
         uint256 endTime
     ) external ;
+
+    function checkQuizIsRegistered(string memory quiz_id) external view returns (bool);
+    function coprocessorCallbackOutputsOnly(bytes32 _machineHash, bytes32 _payloadHash, bytes[] calldata outputs) external;
+    function computationSent(bytes32) external view returns (bool);
+    function demoHandleNotice(bytes32 payloadHash, bytes memory notice) external ;
+    function checkQuizResponse(bytes32 paloadHash) external view returns (bytes memory);
 }
     

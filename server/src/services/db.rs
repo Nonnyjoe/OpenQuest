@@ -2,7 +2,7 @@ use crate::models::protocol_model::Protocol;
 use crate::models::quiz_model::{Participant, Quiz};
 use crate::models::user_model::{SimpleUserStruct, User, Wallet};
 use dotenv::dotenv;
-use futures::TryStreamExt;
+use futures::{StreamExt, TryStreamExt};
 use mongodb::bson::from_document;
 use mongodb::error::Error;
 use mongodb::{
@@ -108,6 +108,32 @@ impl Database {
             Ok(Some(user)) => Ok(user),
             Ok(None) => Err(DatabaseResponse::new(404, "User not found".to_string())),
             Err(e) => Err(DatabaseResponse::new(500, format!("Database error: {}", e))),
+        }
+    }
+
+    pub async fn get_user_via_address(&self, address: String) -> Result<User, DatabaseResponse> {
+        let filter = doc! {
+            "wallet.wallet_address": {
+                "$regex": format!("^{}$", address),
+                "$options": "i"  // Case-insensitive option
+            }
+        };
+
+        let mut cursor = match self.users.find(filter).await {
+            Ok(cursor) => cursor,
+            Err(e) => return Err(DatabaseResponse::new(500, format!("Database error: {}", e))),
+        };
+
+        if let Some(result) = cursor.next().await {
+            match result {
+                Ok(user) => Ok(user),
+                Err(e) => Err(DatabaseResponse::new(
+                    500,
+                    format!("Error parsing user data: {}", e),
+                )),
+            }
+        } else {
+            Err(DatabaseResponse::new(404, "User not found".to_string()))
         }
     }
 
@@ -281,6 +307,23 @@ impl Database {
                     Err(DatabaseResponse::new(404, "Quiz not found".to_string()))
                 } else {
                     Ok(quiz)
+                }
+            }
+            Err(e) => Err(DatabaseResponse::new(500, format!("{}", e))),
+        }
+    }
+
+    pub async fn update_user(&self, user: User) -> Result<User, DatabaseResponse> {
+        let result = self
+            .users
+            .replace_one(doc! {"user_uuid": user.user_uuid.clone()}, user.clone())
+            .await;
+        match result {
+            Ok(update_result) => {
+                if update_result.modified_count == 0 {
+                    Err(DatabaseResponse::new(404, "User not found".to_string()))
+                } else {
+                    Ok(user)
                 }
             }
             Err(e) => Err(DatabaseResponse::new(500, format!("{}", e))),

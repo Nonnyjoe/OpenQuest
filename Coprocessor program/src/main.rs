@@ -1,5 +1,6 @@
 use base64::decode as base64_decode;
 use bincode;
+use ethabi::{encode, Token};
 use hex;
 use json::{object, JsonValue};
 use rand::seq::SliceRandom;
@@ -9,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::env;
 use std::io::Cursor;
+use std::str::FromStr;
 use zstd::stream::{decode_all, encode_all};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -201,19 +203,24 @@ pub async fn handle_advance(
         onchain_data.results.push(userData);
     }
 
-    // Serialize to JSON
-    let serialized = serde_json::to_string(&onchain_data).unwrap();
-    println!("Serialized JSON: {}", serialized);
+    // // Serialize to JSON
+    // let serialized = serde_json::to_string(&onchain_data).unwrap();
+    // println!("Serialized JSON: {}", serialized);
 
-    // Convert JSON string to bytes
-    let bytes = serialized.as_bytes();
+    // // Convert JSON string to bytes
+    // let bytes = serialized.as_bytes();
 
-    // Convert bytes to hex (for easier Solidity decoding)
-    let hex_encoded = hex::encode(bytes);
+    // // Convert bytes to hex (for easier Solidity decoding)
+    // let hex_encoded = hex::encode(bytes);
+    // println!("Hex-encoded bytes: 0x{}", hex_encoded);
+
+    let encoded_data = encode_quiz_response(onchain_data.clone());
+    println!("Serialized JSON: {:?}", encoded_data);
+    let hex_encoded = hex::encode(encoded_data);
     println!("Hex-encoded bytes: 0x{}", hex_encoded);
 
     // Create a notice
-    let notice = object! { "payload" => hex_encoded };
+    let notice = object! { "payload" => format!("0x{}", hex_encoded) };
     let notice_request = hyper::Request::builder()
         .method(hyper::Method::POST)
         .uri(format!("{}/notice", _server_addr))
@@ -436,6 +443,35 @@ fn calculate_leaderboard_points(quiz: &QuizOffchainData, user_score: f64) -> f64
     let points_earned = base_points + (score_percentage * difficulty_multiplier);
     println!("User Point Earned is: {}", points_earned);
     return points_earned;
+}
+
+fn encode_quiz_response(response: QuizResponse) -> Vec<u8> {
+    // // Convert the `results` field (Vec<RewardData>) into a Vec<Token>
+    // let results_tokens: Vec<Token> = response
+    //     .results
+    //     .iter()
+    //     .map(|reward_data| {
+    //         Token::Tuple(vec![
+    //             Token::String(reward_data.user_address.clone()),
+    //             Token::Bytes(reward_data.reward_amount.to_be_bytes().to_vec()),
+    //             Token::Bytes(reward_data.leader_boar_addition.to_be_bytes().to_vec()),
+    //             Token::Bytes(reward_data.quiz_score.to_be_bytes().to_vec()),
+    //         ])
+    //     })
+    //     .collect();
+
+    // // Convert the entire `QuizResponse` into a Token
+    // let quiz_response_token = Token::Tuple(vec![
+    //     Token::String(response.uuid.clone()),
+    //     Token::String(response.protocol.clone()),
+    //     Token::Array(results_tokens),
+    // ]);
+
+    // // Encode the Token into ABI-encoded bytes
+    // encode(&[quiz_response_token])
+
+    let encoded = serde_json::to_vec(&response).unwrap();
+    return encoded;
 }
 
 #[tokio::main]

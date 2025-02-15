@@ -1,26 +1,38 @@
 use super::db::Database;
-use crate::models::quiz_model::{Quiz, QuizAccess};
-
+use crate::models::{
+    protocol_model::Protocol,
+    quiz_model::{Quiz, QuizAccess, Status},
+    user_model::QuizResult,
+};
 use alloy::{
     network::EthereumWallet,
     primitives::{Address, U256},
     providers::ProviderBuilder,
 };
-
-use alloy_primitives::Bytes;
+use alloy_contract::Event;
+use alloy_primitives::{keccak256, Bytes};
 use alloy_provider::Provider;
+use alloy_rpc_types::eth::{Filter, FilteredParams, Log};
 use alloy_signer_local::PrivateKeySigner;
 use alloy_sol_types::sol;
-
+use alloy_sol_types::SolEvent;
 use bincode;
 use dotenv::dotenv;
+use ethabi::{decode, ParamType, Token};
+use futures_util::FutureExt;
+use futures_util::{StreamExt, TryStreamExt};
+use hex::decode as hex_decode;
 use mongodb::bson::doc;
 use serde::{Deserialize, Serialize};
 use std::env;
-
+use std::error::Error;
 use std::io::Cursor;
 use std::str::FromStr;
+use std::sync::{Arc, Mutex};
+use std::thread;
 use std::time::Duration;
+use tokio::runtime::Runtime;
+use tokio::sync::oneshot;
 use tokio::time::sleep;
 use zstd::stream::{decode_all, encode_all};
 
@@ -32,11 +44,26 @@ struct PtotocolCreated {
     protocol_contract: Address,
 }
 
+#[derive(serde::Deserialize, Debug, Clone)]
+struct RewardData {
+    user_address: String,
+    reward_amount: f64,
+    leader_boar_addition: f64,
+    quiz_score: f64,
+}
+
+#[derive(serde::Deserialize, Debug, Clone)]
+struct QuizResponse {
+    uuid: String,
+    protocol: String,
+    results: Vec<RewardData>,
+}
+
 sol!(
     #[derive(Debug, Deserialize, Serialize)]
     #[allow(missing_docs)]
     #[sol(rpc)]
-    PROTOCOL,
+    ProtocolABI,
     "abi/ProtocolABI.json"
 );
 
@@ -46,6 +73,13 @@ sol!(
     #[sol(rpc)]
     FACTORY,
     "abi/ProtocolFactoryABI.json"
+);
+
+sol!(
+   interface IProtocol {
+        #[derive(Debug)]
+       event ResultReceived(bytes data);
+   }
 );
 
 pub async fn check_and_submit_quizzes(db: Database) {
@@ -62,16 +96,42 @@ pub async fn check_and_submit_quizzes(db: Database) {
             println!("Checking Quiz {}", quiz.uuid);
 
             if quiz.end_time <= now && quiz.submited == false {
-                // Send quiz to Solidity contract
-                match send_quiz_to_contract(&quiz, db.clone()).await {
+                // Send quiz to Solidity
+                let (status, compressed_data, address) =
+                    send_quiz_to_contract(&quiz, db.clone()).await;
+                match status {
                     true => {
-                        quiz.submited = true;
-                        match db.update_quiz(quiz.clone()).await {
-                            Ok(_result) => {
-                                println!("Quiz {} submitted successfully", quiz.uuid);
-                            }
-                            Err(err) => {
-                                println!("Error submitting quiz {}: {:?}", quiz.uuid, err);
+                        let quiz_response =
+                            get_quiz_response(compressed_data.clone(), address.clone())
+                                .await
+                                .unwrap();
+                        if quiz_response.contains(&"false".to_string()) {
+                            println!("Quiz {} submission failed", quiz.uuid);
+                            continue;
+                        } else {
+                            let hex_str = quiz_response.trim_start_matches("0x");
+                            let bytes_response = hex_decode(hex_str).unwrap();
+                            println!("Bytes response: {:?}", bytes_response);
+
+                            let data = decode_quiz_response(&bytes_response).unwrap();
+                            println!("Quiz response: {:?}", data);
+                            quiz.submited = true;
+                            quiz.status = Status::Completed;
+                            match db.update_quiz(quiz.clone()).await {
+                                Ok(_result) => {
+                                    match sort_quiz_data(data.clone(), db.clone()).await {
+                                        true => {
+                                            println!("Quiz {} sorted successfully", quiz.uuid);
+                                        }
+                                        false => {
+                                            println!("Error sorting quiz {}", quiz.uuid);
+                                        }
+                                    };
+                                    println!("Quiz {} updated successfully", quiz.uuid);
+                                }
+                                Err(err) => {
+                                    println!("Error updating quiz {}: {:?}", quiz.uuid, err);
+                                }
                             }
                         }
                     }
@@ -90,12 +150,10 @@ pub async fn check_and_submit_quizzes(db: Database) {
     }
 }
 
-async fn send_quiz_to_contract(quiz: &Quiz, db: Database) -> bool {
+async fn send_quiz_to_contract(quiz: &Quiz, db: Database) -> (bool, String, String) {
     dotenv().ok();
     let rpc = env::var("RPC").expect("RPC must be set");
     let private_key = env::var("PRIVATE_KEY").expect("PRIVATE_KEY must be set");
-    let open_quest_factory_address =
-        env::var("OPENQUEST_FACTORY").expect("OPENQUEST_FACTORY must be set");
 
     let protocol_address = db
         .get_protocol_via_name(quiz.protocol.clone())
@@ -107,6 +165,7 @@ async fn send_quiz_to_contract(quiz: &Quiz, db: Database) -> bool {
 
     // Compress the quiz data for the Solidity contract
     let compressed_quiz_data = compress_struct(&quiz.into_offchain_quiz_data());
+
     let submit_result = submit_quiz(
         quiz.uuid.clone(),
         quiz.name.clone(),
@@ -115,22 +174,31 @@ async fn send_quiz_to_contract(quiz: &Quiz, db: Database) -> bool {
         user.wallet.wallet_address.clone().unwrap(),
         quiz.protocol.clone(),
         quiz.access.clone(),
-        compressed_quiz_data,
+        compressed_quiz_data.clone(),
         quiz.end_time,
         &private_key,
         &rpc,
-        protocol_address,
+        protocol_address.clone(),
     )
     .await;
+
+    // let quiz_response: Result<String, Box<dyn Error + Send + Sync>> =
+    //     get_quiz_response(compressed_quiz_data.clone(), protocol_address.clone()).await;
 
     match submit_result {
         Ok(_) => {
             println!("Successful submission");
-            return true;
+            // let quiz_response: Result<String, Box<dyn Error + Send + Sync>> =
+            //     get_quiz_response(compressed_quiz_data.clone(), protocol_address.clone()).await;
+            return (true, compressed_quiz_data.clone(), protocol_address.clone());
         }
         Err(err) => {
             println!("Error submitting quiz: {:?}", err);
-            return false;
+            return (
+                false,
+                compressed_quiz_data.clone(),
+                protocol_address.clone(),
+            );
         }
     }
 
@@ -212,7 +280,7 @@ async fn submit_quiz(
     let protocol_addr = Address::from_str(&contract_address).unwrap();
 
     println!("protocol_address: {}", protocol_addr);
-    let protocol_instance = PROTOCOL::new(protocol_addr, provider);
+    let protocol_instance = ProtocolABI::new(protocol_addr, provider);
 
     println!(
         "{}, {}, {:?}, {:?}, {:?}, {}, {}, {:?}, {:?}",
@@ -247,24 +315,145 @@ async fn submit_quiz(
         .watch()
         .await?;
 
-    // let tx_hash = open_quest
-    //     .gradeQuiz(
-    // uuid.as_str().into(),
-    // name.as_str().into(),
-    // total_reward.try_into()?,
-    // max_reward_per_user.try_into()?,
-    // created_by.parse()?,
-    // protocol.as_str().into(),
-    // access.to_string().into(),
-    // compressed_data.into(),
-    // end_time.try_into()?,
-    //     )
-    // .send()
-    // .await?
-    // .watch()
-    // .await?;
-
     println!("Transaction submitted, TX-Hash is: {:?}", tx_hash);
 
     Ok(())
+}
+
+pub async fn get_quiz_response(
+    compressed_quiz_data: String,
+    protocol_address: String,
+) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    let rpc = env::var("RPC").expect("RPC must be set");
+    let private_key = env::var("PRIVATE_KEY").expect("PRIVATE_KEY must be set");
+    let open_quest_factory_address =
+        env::var("OPENQUEST_FACTORY").expect("OPENQUEST_FACTORY must be set");
+
+    // Create a signer from the private key
+    let signer = PrivateKeySigner::from_str(private_key.as_str())?;
+
+    let wallet = EthereumWallet::from(signer.clone());
+
+    // Create a provider (e.g., HTTP provider)
+    let provider = ProviderBuilder::new().wallet(wallet).on_http(rpc.parse()?);
+
+    let protocol_addr = Address::from_str(&protocol_address).unwrap();
+
+    println!("protocol_address: {}", protocol_addr);
+    let protocol_instance = ProtocolABI::new(protocol_addr, provider);
+
+    // Convert the quiz data into Bytes and then hash it using keccak256
+    let bytes: Bytes = compressed_quiz_data.parse::<Bytes>().unwrap();
+    let hashed_data = keccak256(bytes.clone());
+
+    // Call the checkQuizResponse view function
+    let response_bytes = protocol_instance
+        .checkQuizResponse(hashed_data)
+        .call()
+        .await?;
+
+    println!("Raw response bytes: {:?}", response_bytes._0);
+    let response = response_bytes._0;
+
+    // Convert the Bytes to a String
+    // let response_str = String::from_utf8_lossy(&response_bytes._0).to_string();
+
+    println!("Quiz Response as String: {}", format!("{}", response));
+
+    if response.len() < 4 {
+        println!("No quiz response available yet.");
+        return Ok("false".to_string());
+    }
+
+    Ok(format!("{}", response))
+}
+
+pub async fn subscribe_to_log(
+    contract_address: String,
+    shutdown_tx: oneshot::Sender<()>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let rpc = env::var("RPC").expect("RPC must be set");
+    let private_key = env::var("PRIVATE_KEY").expect("PRIVATE_KEY must be set");
+
+    // let wallet = LocalWallet::from_str(&private_key)?.with_chain_id(Chain::Mainnet);
+
+    let signer = PrivateKeySigner::from_str(private_key.as_str())?;
+
+    let wallet = EthereumWallet::from(signer.clone());
+
+    // Retrieve environment variables
+    let rpc = env::var("RPC").expect("RPC must be set");
+
+    // let provider = ProviderBuilder::new().wallet(wallet).on_http(rpc.parse()?);
+
+    let provider = ProviderBuilder::new()
+        .wallet(wallet.clone())
+        .on_http(rpc.parse()?);
+
+    let protocol_addr = Address::from_str(&contract_address)?;
+
+    let filter = Filter::new()
+        .address(protocol_addr)
+        .event("ResultReceived(bytes)");
+    // let event: Event<(), _, IProtocol::ResultReceived, _> = Event::new(&provider, Filter::new());
+    let event: Event<(), _, IProtocol::ResultReceived, _> = Event::new(&provider, filter);
+
+    let subscription = event.subscribe().await?;
+    let mut stream = subscription.into_stream();
+
+    println!("Listening for ResultReceived events...");
+
+    while let Ok((stream_event, _)) = stream.next().await.unwrap() {
+        println!("new result received {:?}", stream_event);
+        // Send shutdown signal after processing the event
+        let _ = shutdown_tx.send(());
+        break;
+    }
+
+    Ok(())
+}
+
+fn decode_quiz_response(encoded: &[u8]) -> Result<QuizResponse, String> {
+    let decoded: QuizResponse = serde_json::from_slice(&encoded).unwrap();
+    Ok(decoded)
+}
+
+async fn sort_quiz_data(data: QuizResponse, db: Database) -> bool {
+    let results = data.results.clone();
+    for result in results {
+        println!(
+            "SORTING RESULT FOR USER WITH ADDRESS: {:?}",
+            result.user_address
+        );
+        let user = db.get_user_via_address(result.user_address.clone()).await;
+        match user {
+            Ok(mut user) => {
+                user.update_leader_board_point(data.protocol.clone(), result.leader_boar_addition);
+                user.update_total_reward(result.reward_amount);
+                user.quizes.push(QuizResult {
+                    quiz_uuid: data.uuid.clone(),
+                    score: result.quiz_score,
+                    reward: result.reward_amount,
+                });
+
+                match db.update_user(user).await {
+                    Ok(_) => {
+                        println!("User updated successfully.");
+                        return true;
+                    }
+                    Err(e) => {
+                        println!("Error updating user: {}", e.message);
+                        return false;
+                    }
+                }
+            }
+            Err(e) => {
+                println!(
+                    "User not found for address: {}. Error: {}",
+                    result.user_address, e.message
+                );
+            }
+        }
+    }
+    return false;
 }
