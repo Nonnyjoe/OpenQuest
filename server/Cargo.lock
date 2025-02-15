@@ -4144,7 +4144,6 @@ dependencies = [
  "sha2",
  "tokio",
  "uuid",
- "zstd",
 ]
 
 [[package]]

@@ -49,17 +49,23 @@ pub async fn register_protocol(
                                 .await;
                                 if let Ok(address) = result {
                                     protocol.contract_address = address;
-                                };
-                                match db.create_protocol(protocol.clone()).await {
-                                    Ok(_result) => {
-                                        return ApiResponse::new(
-                                            201,
-                                            format!("{:?}", protocol.name),
-                                        )
+                                    protocol.staffs.push(token_data.claims.user_uuid.clone());
+                                    match db.create_protocol(protocol.clone()).await {
+                                        Ok(_result) => {
+                                            return ApiResponse::new(
+                                                201,
+                                                format!("{:?}", protocol.name),
+                                            )
+                                        }
+                                        Err(err) => {
+                                            return ApiResponse::new(err.error_code, err.message)
+                                        }
                                     }
-                                    Err(err) => {
-                                        return ApiResponse::new(err.error_code, err.message)
-                                    }
+                                } else {
+                                    return ApiResponse::new(
+                                        500,
+                                        "Error creating protocol onChain".to_string(),
+                                    );
                                 }
                             }
                             _ => return ApiResponse::new(e.error_code, e.message),

@@ -1,6 +1,5 @@
 use super::db::Database;
 use crate::models::{
-    protocol_model::Protocol,
     quiz_model::{Quiz, QuizAccess, Status},
     user_model::QuizResult,
 };
@@ -15,26 +14,18 @@ use alloy_provider::Provider;
 use alloy_rpc_types::eth::{Filter, FilteredParams, Log};
 use alloy_signer_local::PrivateKeySigner;
 use alloy_sol_types::sol;
-use alloy_sol_types::SolEvent;
 use bincode;
 use dotenv::dotenv;
 use ethabi::{decode, ParamType, Token};
-use futures_util::FutureExt;
 use futures_util::{StreamExt, TryStreamExt};
 use hex::decode as hex_decode;
 use mongodb::bson::doc;
 use serde::{Deserialize, Serialize};
 use std::env;
-use std::error::Error;
-use std::io::Cursor;
 use std::str::FromStr;
-use std::sync::{Arc, Mutex};
-use std::thread;
 use std::time::Duration;
-use tokio::runtime::Runtime;
 use tokio::sync::oneshot;
 use tokio::time::sleep;
-use zstd::stream::{decode_all, encode_all};
 
 #[derive(Debug, Deserialize)]
 struct PtotocolCreated {
