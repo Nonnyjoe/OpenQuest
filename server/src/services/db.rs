@@ -176,15 +176,28 @@ impl Database {
     }
 
     pub async fn get_protocol_via_id(&self, id: String) -> Result<Protocol, DatabaseResponse> {
-        let result = self
-            .protocols
-            .find_one(doc! {"get_protocol_via_id": id})
-            .await;
+        let filter = doc! {
+            "protocol_uuid": {
+                "$regex": format!("^{}$", id),
+                "$options": "i"  // Case-insensitive option
+            }
+        };
 
-        match result {
-            Ok(Some(protocol)) => Ok(protocol),
-            Ok(None) => Err(DatabaseResponse::new(404, "Protocol not found".to_string())),
-            Err(e) => Err(DatabaseResponse::new(500, format!("Database error: {}", e))),
+        let mut cursor = match self.protocols.find(filter).await {
+            Ok(cursor) => cursor,
+            Err(e) => return Err(DatabaseResponse::new(500, format!("Database error: {}", e))),
+        };
+
+        if let Some(result) = cursor.next().await {
+            match result {
+                Ok(quiz) => Ok(quiz),
+                Err(e) => Err(DatabaseResponse::new(
+                    500,
+                    format!("Error parsing protocol data: {}", e),
+                )),
+            }
+        } else {
+            Err(DatabaseResponse::new(404, "Protocol not found".to_string()))
         }
     }
 
@@ -270,12 +283,28 @@ impl Database {
     }
 
     pub async fn get_quiz_via_uuid(&self, uuid: String) -> Result<Quiz, DatabaseResponse> {
-        let result = self.quizes.find_one(doc! {"uuid": uuid}).await;
+        let filter = doc! {
+            "uuid": {
+                "$regex": format!("^{}$", uuid),
+                "$options": "i"  // Case-insensitive option
+            }
+        };
 
-        match result {
-            Ok(Some(quiz)) => Ok(quiz),
-            Ok(None) => Err(DatabaseResponse::new(404, "User not found".to_string())),
-            Err(e) => Err(DatabaseResponse::new(500, format!("Database error: {}", e))),
+        let mut cursor = match self.quizes.find(filter).await {
+            Ok(cursor) => cursor,
+            Err(e) => return Err(DatabaseResponse::new(500, format!("Database error: {}", e))),
+        };
+
+        if let Some(result) = cursor.next().await {
+            match result {
+                Ok(quiz) => Ok(quiz),
+                Err(e) => Err(DatabaseResponse::new(
+                    500,
+                    format!("Error parsing user data: {}", e),
+                )),
+            }
+        } else {
+            Err(DatabaseResponse::new(404, "Quiz not found".to_string()))
         }
     }
 
