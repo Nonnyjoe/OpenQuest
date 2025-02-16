@@ -1,0 +1,136 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0, 0%, 3.9%;
+    --foreground: 0, 0%, 98%;
+
+    --card: 0, 0%, 3.9%;
+    --card-foreground: 0, 0%, 98%;
+    --popover: 0, 0%, 3.9%;
+    --popover-foreground: 0, 0%, 98%;
+
+    --primary: 267, 100%, 75%;
+    --primary-foreground: 0, 0%, 98%;
+
+    --secondary: 180, 100%, 50%;
+    --secondary-foreground: 0, 0%, 98%;
+
+    --accent: 330, 100%, 65%;
+    --accent-foreground: 0, 0%, 98%;
+
+    --muted: 0, 0%, 15%;
+    --muted-foreground: 0, 0%, 63.9%;
+
+    --destructive: 0, 100%, 50%;
+    --destructive-foreground: 0, 0%, 98%;
+
+    --border: 0, 0%, 14.9%;
+    --input: 0, 0%, 14.9%;
+    --ring: 267, 100%, 75%;
+
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 265 89% 78%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 168 100% 73%;
+    --secondary-foreground: 240 10% 3.9%;
+    --accent: 12 90% 65%;
+    --accent-foreground: 0 0% 98%;
+    --muted: 240 10% 15%;
+    --muted-foreground: 240 5% 64.9%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 10% 15%;
+    --input: 240 10% 15%;
+    --ring: 265 89% 78%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@layer utilities {
+  .gradient-primary {
+    @apply bg-gradient-to-r from-[hsl(267,100%,75%)] to-[hsl(180,100%,50%)];
+  }
+
+  .gradient-secondary {
+    @apply bg-gradient-to-r from-[hsl(180,100%,50%)] to-[hsl(330,100%,65%)];
+  }
+
+  .gradient-accent {
+    @apply bg-gradient-to-r from-[hsl(330,100%,65%)] to-[hsl(267,100%,75%)];
+  }
+
+  .text-gradient {
+    @apply bg-clip-text text-transparent;
+  }
+
+  .glow {
+    text-shadow: 0 0 10px hsl(var(--primary));
+  }
+
+  .animate-gradient-x {
+    animation: gradient-x 15s linear infinite;
+    background-size: 200% 200%;
+  }
+
+  @keyframes gradient-x {
+    0% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+    100% {
+      background-position: 0% 50%;
+    }
+  }
+
+  .hover-card-animation {
+    @apply transition-all duration-200 hover:shadow-md hover:border-primary/50;
+  }
+
+  .hover-card-content {
+    @apply group-hover:border-primary/50 transition-colors;
+  }
+
+  .hover-card-title {
+    @apply group-hover:text-primary transition-colors;
+  }
+}
+
+@layer base {
+  .gradient-text {
+    @apply bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent;
+  }
+
+  .hover-gradient {
+    @apply relative overflow-hidden;
+  }
+
+  .hover-gradient::after {
+    @apply absolute inset-0 bg-gradient-to-r from-[hsl(var(--primary)/0.1)] via-[hsl(var(--secondary)/0.1)] to-[hsl(var(--accent)/0.1)] opacity-0 transition-opacity duration-300 content-[''];
+  }
+
+  .hover-gradient:hover::after {
+    @apply opacity-100;
+  }
+}
