@@ -11,7 +11,7 @@
 </div>
 <br>
 <p align="center">
-	<img src="https://img.shields.io/github/license/Mugen-Builders/Nonnyjoe/OpenQuest?style=default&logo=opensourceinitiative&logoColor=white&color=79F7FA" alt="license">
+	<img src="https://img.shields.io/github/license/Nonnyjoe/OpenQuest?style=default&logo=opensourceinitiative&logoColor=white&color=79F7FA" alt="license">
 	<img src="https://img.shields.io/github/last-commit/Nonnyjoe/OpenQuest?style=default&logo=git&logoColor=white&color=868380" alt="last-commit">
 </p>
 
