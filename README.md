@@ -65,7 +65,7 @@ Cartesi, EigenLayer, Next.js, Rust, Actix-web, Solidity
 
 ## 🔗 Links
 
-- **Website:** [OpenQuest](https://github.com/Nonnyjoe/OpenQuest)
+- **Website:** [OpenQuest](https://open-quest-xi.vercel.app/)
 - **GitHub:** [OpenQuest Repository](https://github.com/Nonnyjoe/OpenQuest)
 - **Solidity Contracts:**
   - [Contract 1](https://holesky.etherscan.io/address/0x78f7ddbb09d77f08b8e6a3df94e79fe606966d82)
