@@ -2,7 +2,7 @@ mod models;
 mod routes;
 mod services;
 mod utils;
-
+use actix_cors::Cors;
 use actix_web::{
     get, http, middleware::Logger, web, web::Data, App, HttpResponse, HttpServer, Responder,
 };
@@ -53,6 +53,17 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .app_data(db_data.clone())
             .wrap(logger)
+            .wrap(
+                Cors::default()
+                    // .allowed_origin("http://localhost:3000") // Allow requests from your frontend
+                    .allow_any_origin()
+                    .allowed_methods(vec!["GET", "POST", "PATCH", "DELETE"])
+                    .allowed_headers(vec![
+                        http::header::CONTENT_TYPE,
+                        http::header::AUTHORIZATION,
+                    ])
+                    .supports_credentials(),
+            )
             .service(health_check)
             .service(get_all_users)
             .service(register_user)
