@@ -33,6 +33,12 @@ With a leaderboard system, projects gain solid, verifiable metrics on contributo
 
 ---
 
+## Architecture
+
+![OpenQuest Architecture](img/flow.png)
+
+---
+
 ## 🛠️ How OpenQuest Works
 
 - **Personalized Account/Contracts:** Protocols register on OpenQuest, deploying dedicated smart contracts for seamless Quest management.
