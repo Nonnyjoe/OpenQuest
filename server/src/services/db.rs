@@ -175,6 +175,19 @@ impl Database {
         }
     }
 
+    pub async fn get_protocol_via_id(&self, id: String) -> Result<Protocol, DatabaseResponse> {
+        let result = self
+            .protocols
+            .find_one(doc! {"get_protocol_via_id": id})
+            .await;
+
+        match result {
+            Ok(Some(protocol)) => Ok(protocol),
+            Ok(None) => Err(DatabaseResponse::new(404, "Protocol not found".to_string())),
+            Err(e) => Err(DatabaseResponse::new(500, format!("Database error: {}", e))),
+        }
+    }
+
     pub async fn create_protocol(
         &self,
         protocol: Protocol,

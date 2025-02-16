@@ -8,6 +8,7 @@ use actix_web::HttpResponse;
 use actix_web::{
     cookie::Cookie,
     get, post,
+    web::Path,
     web::{Data, Json},
 };
 use serde::{Deserialize, Serialize};
@@ -32,11 +33,25 @@ pub struct SubmitLogin {
     pub password: String,
 }
 
+#[derive(Serialize, Clone, Deserialize)]
+pub struct SubmitGetProfileViaEmail {
+    pub email: String,
+}
+
 macro_rules! try_or_return_string {
     ($result:expr) => {
         match $result {
             Ok(value) => value,
             Err(e) => return Err(DatabaseResponse::new(500, e.to_string())),
+        }
+    };
+}
+
+macro_rules! try_or_return {
+    ($result:expr) => {
+        match $result {
+            Ok(value) => value,
+            Err(e) => return ApiResponse::new(e.error_code, e.message),
         }
     };
 }
@@ -122,4 +137,22 @@ pub async fn login_user(db: Data<Database>, request: Json<SubmitLogin>) -> HttpR
         }
         Err(e) => return HttpResponse::InternalServerError().body(e.message),
     }
+}
+
+#[get("/user/by-email/{email}")]
+pub async fn get_user_via_email(
+    db: Data<Database>,
+    request: Path<SubmitGetProfileViaEmail>,
+) -> ApiResponse {
+    let email_address = request.into_inner().email;
+
+    let user: User = try_or_return!(db.get_user_via_email(email_address).await);
+    return ApiResponse::new(200, format!("{:?}", user));
+}
+
+#[get("/user/by-id/{user_id}")]
+pub async fn get_user_by_id(db: Data<Database>, path: Path<String>) -> ApiResponse {
+    let user_id = path.into_inner();
+    let user: User = try_or_return!(db.get_user_via_uuid(user_id.clone()).await);
+    ApiResponse::new(200, format!("{:?}", user))
 }

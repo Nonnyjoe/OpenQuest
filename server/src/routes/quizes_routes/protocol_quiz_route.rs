@@ -6,6 +6,7 @@ use crate::utils::{api_response::ApiResponse, jwt::decode_token};
 use actix_web::{
     cookie::{self, Cookie},
     get, post,
+    web::Path,
     web::{Data, Json},
 };
 use actix_web::{HttpRequest, HttpResponse};
@@ -111,3 +112,18 @@ pub async fn create_quiz(
 //         return ApiResponse::new(401, "Missing token".to_string());
 //     }
 // }
+
+#[get("/quizes")]
+pub async fn get_all_quiz(db: Data<Database>) -> ApiResponse {
+    match db.get_all_quizes().await {
+        Ok(quizzes) => ApiResponse::new(200, format!("{:?}", quizzes)),
+        Err(e) => ApiResponse::new(e.error_code, e.message),
+    }
+}
+
+#[get("/quiz/by-id/{quiz_id}")]
+pub async fn get_quiz_by_id(db: Data<Database>, path: Path<String>) -> ApiResponse {
+    let quiz_id = path.into_inner();
+    let quiz: Quiz = try_or_return!(db.get_quiz_via_uuid(quiz_id.clone()).await);
+    ApiResponse::new(200, format!("{:?}", quiz))
+}

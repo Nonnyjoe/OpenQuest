@@ -5,6 +5,7 @@ use crate::utils::{api_response::ApiResponse, jwt::decode_token};
 use actix_web::{
     cookie::{self, Cookie},
     get, post,
+    web::Path,
     web::{Data, Json},
 };
 use actix_web::{HttpRequest, HttpResponse};
@@ -20,6 +21,15 @@ pub struct SubmitRegisterProtocol {
 pub struct SubmitAddProtocolStaff {
     pub protocol_name: String,
     pub staff_uuid: String,
+}
+
+macro_rules! try_or_return {
+    ($result:expr) => {
+        match $result {
+            Ok(value) => value,
+            Err(e) => return ApiResponse::new(e.error_code, e.message),
+        }
+    };
 }
 
 #[post("protocol/register")]
@@ -138,4 +148,19 @@ pub async fn get_all_protocols(db: Data<Database>) -> ApiResponse {
         Ok(users) => ApiResponse::new(200, format!("{:?}", users)),
         Err(e) => ApiResponse::new(e.error_code, e.message),
     }
+}
+
+#[get("/protocol/by-name/{name}")]
+pub async fn get_protocol_via_name(db: Data<Database>, request: Path<String>) -> ApiResponse {
+    let name = request.into_inner();
+
+    let protocol: Protocol = try_or_return!(db.get_protocol_via_name(name).await);
+    return ApiResponse::new(200, format!("{:?}", protocol));
+}
+
+#[get("/protocol/by-id/{protocol_id}")]
+pub async fn get_protocol_by_id(db: Data<Database>, path: Path<String>) -> ApiResponse {
+    let protocol_id = path.into_inner();
+    let protocol: Protocol = try_or_return!(db.get_protocol_via_id(protocol_id.clone()).await);
+    ApiResponse::new(200, format!("{:?}", protocol))
 }
