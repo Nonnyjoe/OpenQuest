@@ -9,12 +9,18 @@ use actix_web::{
 use dotenv::dotenv;
 use routes::{
     health_routes::health_check,
-    protocol_routes::{add_protocol_staff, get_all_protocols, register_protocol},
+    protocol_routes::{
+        add_protocol_staff, get_all_protocols, get_protocol_by_id, get_protocol_via_name,
+        register_protocol,
+    },
     quizes_routes::{
         hacker_quize_route::{start_quiz, submit_quiz},
-        protocol_quiz_route::create_quiz,
+        protocol_quiz_route::{create_quiz, get_all_quiz, get_quiz_by_id},
     },
-    user_routes::{get_all_users, link_wallet_address, login_user, register_user},
+    user_routes::{
+        get_all_users, get_user_by_id, get_user_via_email, link_wallet_address, login_user,
+        register_user,
+    },
 };
 use services::{db::Database, quiz_services::check_and_submit_quizzes};
 use std::env;
@@ -74,6 +80,12 @@ async fn main() -> std::io::Result<()> {
             .service(add_protocol_staff)
             .service(create_quiz)
             .service(start_quiz)
+            .service(get_user_via_email)
+            .service(get_user_by_id)
+            .service(get_protocol_via_name)
+            .service(get_protocol_by_id)
+            .service(get_all_quiz)
+            .service(get_quiz_by_id)
             .service(submit_quiz)
     })
     .bind((server_url, port))?
