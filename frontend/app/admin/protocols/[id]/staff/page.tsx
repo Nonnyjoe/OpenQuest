@@ -1,5 +1,7 @@
 "use client";
 
+import { useState, useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -36,10 +38,19 @@ import {
 import { useToast } from "@/components/ui/use-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { motion } from "framer-motion";
-import { Loader2, MoreHorizontal, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
-import { useForm } from "react-hook-form";
-import * as z from "zod";
+import {
+  Loader2,
+  MoreHorizontal,
+  Plus,
+  Trash2,
+  Search,
+  Mail,
+} from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { protocolService } from "@/services/protocol-service";
+import { Skeleton } from "@/components/ui/skeleton";
+import { z } from "zod";
 
 interface StaffMember {
   id: string;
@@ -77,202 +88,138 @@ const mockStaff: StaffMember[] = [
 ];
 
 export default function ProtocolStaffPage() {
-  const [isLoading, setIsLoading] = useState(false);
-  const [staff, setStaff] = useState<StaffMember[]>(mockStaff);
-  const { toast } = useToast();
+  const params = useParams();
+  const router = useRouter();
+  const [staff, setStaff] = useState<any[]>([]);
+  const [protocol, setProtocol] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
 
-  const form = useForm<StaffFormValues>({
-    resolver: zodResolver(staffFormSchema),
-    defaultValues: {
-      fullName: "",
-      email: "",
-      role: "moderator",
-    },
-  });
-
-  async function onSubmit(data: StaffFormValues) {
-    setIsLoading(true);
-    try {
-      const newStaffMember: StaffMember = {
-        id: Date.now().toString(),
-        fullName: data.fullName,
-        email: data.email,
-        role: data.role,
-        dateAdded: new Date().toISOString().split("T")[0],
-      };
-      setStaff([...staff, newStaffMember]);
-      form.reset();
-      toast({
-        title: "Staff Added",
-        description: "New staff member has been successfully added.",
-      });
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Something went wrong. Please try again.",
-        variant: "destructive",
-      });
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const [protocolData, staffData] = await Promise.all([
+          protocolService.getProtocolById(params.id as string),
+          protocolService.getProtocolStaff(params.id as string),
+        ]);
+        setProtocol(protocolData);
+        setStaff(staffData);
+      } catch (error) {
+      } finally {
+        setIsLoading(false);
+      }
     }
-    setIsLoading(false);
-  }
 
-  const removeStaffMember = (id: string) => {
-    setStaff(staff.filter((member) => member.id !== id));
-    toast({
-      title: "Staff Removed",
-      description: "Staff member has been removed.",
-    });
-  };
+    fetchData();
+  }, [params.id]);
+
+  const filteredStaff = staff.filter(
+    (member) =>
+      member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      member.email.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  if (isLoading) {
+    return (
+      <div className="container py-10">
+        <Skeleton className="h-8 w-[300px] mb-4" />
+        <Skeleton className="h-4 w-[200px] mb-8" />
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-[150px] mb-2" />
+            <Skeleton className="h-4 w-[250px]" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {[1, 2, 3].map((n) => (
+                <Skeleton key={n} className="h-16 w-full" />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="container py-10">
-      <div className="mx-auto max-w-4xl space-y-8">
-        <div className="space-y-2">
-          <h1 className="text-3xl font-bold tracking-tight">Manage Staff</h1>
+      <div className="flex justify-between items-center mb-8">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">
+            {protocol?.name} Staff
+          </h1>
           <p className="text-muted-foreground">
-            Add or remove staff members for your protocol
+            Manage staff members for {protocol?.name}
           </p>
         </div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
+        <Button
+          onClick={() =>
+            router.push(`/admin/protocols/${params.id}/staff/invite`)
+          }
         >
-          <Card>
-            <CardHeader>
-              <CardTitle>Add New Staff</CardTitle>
-              <CardDescription>
-                Invite team members to help manage your protocol
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Form {...form}>
-                <form
-                  onSubmit={form.handleSubmit(onSubmit)}
-                  className="flex gap-4"
-                >
-                  <div className="flex-1 space-y-4">
-                    <FormField
-                      control={form.control}
-                      name="fullName"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormControl>
-                            <Input placeholder="Enter full name" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="email"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormControl>
-                            <Input
-                              placeholder="Enter email address"
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
-                  <div className="w-[200px]">
-                    <FormField
-                      control={form.control}
-                      name="role"
-                      render={({ field }) => (
-                        <FormItem>
-                          <Select
-                            onValueChange={field.onChange}
-                            defaultValue={field.value}
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select role" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="admin">Admin</SelectItem>
-                              <SelectItem value="moderator">
-                                Moderator
-                              </SelectItem>
-                              <SelectItem value="judge">Judge</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
-                  <Button type="submit" disabled={isLoading}>
-                    {isLoading && (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    )}
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add Staff
-                  </Button>
-                </form>
-              </Form>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.1 }}
-        >
-          <Card>
-            <CardHeader>
-              <CardTitle>Current Staff</CardTitle>
-              <CardDescription>
-                Manage your protocol's team members
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Full Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Date Added</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {staff.map((member) => (
-                    <TableRow key={member.id}>
-                      <TableCell>{member.fullName}</TableCell>
-                      <TableCell>{member.email}</TableCell>
-                      <TableCell className="capitalize">
-                        {member.role}
-                      </TableCell>
-                      <TableCell>{member.dateAdded}</TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeStaffMember(member.id)}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </motion.div>
+          <Plus className="mr-2 h-4 w-4" /> Add Staff Member
+        </Button>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Staff Members</CardTitle>
+          <CardDescription>View and manage protocol staff</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="mb-6">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search staff members..."
+                className="pl-10"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {filteredStaff.map((member) => (
+              <div
+                key={member.id}
+                className="flex items-center justify-between p-4 rounded-lg border bg-card text-card-foreground shadow-sm"
+              >
+                <div className="flex items-center gap-4">
+                  <Avatar>
+                    <AvatarImage src={member.avatar} />
+                    <AvatarFallback>
+                      {member.name
+                        .split(" ")
+                        .map((n: string) => n[0])
+                        .join("")}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <h3 className="font-semibold">{member.name}</h3>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Mail className="h-3 w-3" />
+                      {member.email}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4">
+                  <Badge>{member.role}</Badge>
+                  <Button variant="outline" size="sm">
+                    Manage
+                  </Button>
+                </div>
+              </div>
+            ))}
+
+            {filteredStaff.length === 0 && (
+              <div className="text-center py-6">
+                <p className="text-muted-foreground">No staff members found</p>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

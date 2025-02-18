@@ -133,4 +133,24 @@ export const protocolService = {
       return false;
     }
   },
+
+  async getProtocolStaff(id: string) {
+    const protocol = await this.getProtocolById(id);
+    // You might want to fetch full user details for each staff ID
+    return protocol.staffs.map((staffId: string) => ({
+      id: staffId,
+      // Add placeholder data until we have a proper user service
+      name: "Staff Member",
+      email: "staff@example.com",
+      role: "staff",
+      avatar: "",
+      joinedAt: new Date().toISOString(),
+    }));
+  },
+
+  async getProtocolHackathons(id: string) {
+    const protocol = await this.getProtocolById(id);
+    // Return hackathons array from protocol or empty array if none exist
+    return protocol.hackathons || [];
+  },
 };

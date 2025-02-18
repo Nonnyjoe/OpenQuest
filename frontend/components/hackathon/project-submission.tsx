@@ -235,7 +235,7 @@ export function ProjectSubmission({
                         <Button
                           type="button"
                           variant="outline"
-                          size="icon"
+                          size="sm"
                           className="ml-2"
                           onClick={() => window.open(field.value, "_blank")}
                           disabled={!field.value}
@@ -261,7 +261,7 @@ export function ProjectSubmission({
                         <Button
                           type="button"
                           variant="outline"
-                          size="icon"
+                          size="sm"
                           className="ml-2"
                           onClick={() => window.open(field.value, "_blank")}
                           disabled={!field.value}

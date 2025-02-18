@@ -1,10 +1,8 @@
 "use client";
 
-import { useState } from "react";
 import { useFormContext } from "react-hook-form";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   FormControl,
   FormField,
@@ -13,15 +11,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { QuestionType } from "@/types/quiz";
 
 export function QuestionList() {
   const form = useFormContext();
@@ -32,148 +21,104 @@ export function QuestionList() {
     form.setValue("questions", [
       ...currentQuestions,
       {
-        id: crypto.randomUUID(),
-        type: QuestionType.MULTIPLE_CHOICE,
-        text: "",
+        id: currentQuestions.length + 1,
+        question_text: "",
         options: [
-          { id: crypto.randomUUID(), text: "", isCorrect: false },
-          { id: crypto.randomUUID(), text: "", isCorrect: false },
+          { text: "", option_index: "A" },
+          { text: "", option_index: "B" },
+          { text: "", option_index: "C" },
+          { text: "", option_index: "D" },
         ],
-        points: 1,
+        correct_answer: "A",
       },
-    ]);
-  };
-
-  const removeQuestion = (index: number) => {
-    const currentQuestions = form.getValues("questions");
-    form.setValue(
-      "questions",
-      currentQuestions.filter((_: any, i: number) => i !== index)
-    );
-  };
-
-  const addOption = (questionIndex: number) => {
-    const questions = form.getValues("questions");
-    const question = questions[questionIndex];
-    form.setValue(`questions.${questionIndex}.options`, [
-      ...question.options,
-      { id: crypto.randomUUID(), text: "", isCorrect: false },
     ]);
   };
 
   return (
     <div className="space-y-6">
-      {questions.map((question: any, questionIndex: number) => (
-        <Card key={question.id}>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">
-              Question {questionIndex + 1}
-            </CardTitle>
+      {questions.map((_: any, index: number) => (
+        <div key={index} className="space-y-4 p-4 border rounded-lg">
+          <div className="flex justify-between items-start">
+            <h3 className="font-medium">Question {index + 1}</h3>
             <Button
+              type="button"
               variant="ghost"
               size="sm"
-              onClick={() => removeQuestion(questionIndex)}
+              onClick={() => {
+                const currentQuestions = form.getValues("questions");
+                form.setValue(
+                  "questions",
+                  currentQuestions.filter((_: any, i: number) => i !== index)
+                );
+              }}
             >
               <Trash2 className="h-4 w-4" />
             </Button>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <FormField
-              control={form.control}
-              name={`questions.${questionIndex}.text`}
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Question Text</FormLabel>
-                  <FormControl>
-                    <Textarea {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+          </div>
 
-            <FormField
-              control={form.control}
-              name={`questions.${questionIndex}.type`}
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Question Type</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    defaultValue={field.value}
-                  >
+          <FormField
+            control={form.control}
+            name={`questions.${index}.question_text`}
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Question Text</FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="Enter your question" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <div className="space-y-4">
+            {["A", "B", "C", "D"].map((option) => (
+              <FormField
+                key={option}
+                control={form.control}
+                name={`questions.${index}.options.${
+                  option === "A"
+                    ? 0
+                    : option === "B"
+                    ? 1
+                    : option === "C"
+                    ? 2
+                    : 3
+                }.text`}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Option {option}</FormLabel>
                     <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select question type" />
-                      </SelectTrigger>
+                      <Input
+                        {...field}
+                        placeholder={`Enter option ${option}`}
+                      />
                     </FormControl>
-                    <SelectContent>
-                      <SelectItem value={QuestionType.MULTIPLE_CHOICE}>
-                        Multiple Choice
-                      </SelectItem>
-                      <SelectItem value={QuestionType.SINGLE_CHOICE}>
-                        Single Choice
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            ))}
+          </div>
 
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <FormLabel>Options</FormLabel>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => addOption(questionIndex)}
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Option
-                </Button>
-              </div>
-
-              {question.options.map((option: any, optionIndex: number) => (
-                <div key={option.id} className="flex gap-4">
-                  <FormField
-                    control={form.control}
-                    name={`questions.${questionIndex}.options.${optionIndex}.text`}
-                    render={({ field }) => (
-                      <FormItem className="flex-1">
-                        <FormControl>
-                          <Input placeholder="Option text" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name={`questions.${questionIndex}.options.${optionIndex}.isCorrect`}
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormControl>
-                          <input
-                            type={
-                              question.type === QuestionType.MULTIPLE_CHOICE
-                                ? "checkbox"
-                                : "radio"
-                            }
-                            checked={field.value}
-                            onChange={(e) => field.onChange(e.target.checked)}
-                            name={`question-${questionIndex}-correct`}
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+          <FormField
+            control={form.control}
+            name={`questions.${index}.correct_answer`}
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Correct Answer</FormLabel>
+                <FormControl>
+                  <select {...field} className="w-full p-2 border rounded-md">
+                    <option value="A">A</option>
+                    <option value="B">B</option>
+                    <option value="C">C</option>
+                    <option value="D">D</option>
+                  </select>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
       ))}
 
       <Button type="button" onClick={addQuestion} className="w-full">

@@ -1,3 +1,4 @@
+import { toast } from "@/components/ui/use-toast";
 import { authService } from "@/services/auth-service";
 
 export async function checkHealth() {

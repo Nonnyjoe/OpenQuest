@@ -1,16 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import {
-  Users,
-  Plus,
-  Copy,
-  Check,
-  UserPlus,
-  Rocket,
-  Settings,
-} from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -20,48 +11,49 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import {
+  Calendar,
+  Clock,
+  Users,
+  Trophy,
+  Plus,
+  UserPlus,
+  Router,
+} from "lucide-react";
 import { TeamManagement } from "@/components/hackathon/team-management";
 import { ProjectSubmission } from "@/components/hackathon/project-submission";
 import { HackathonProgress } from "@/components/hackathon/progress";
 
-interface DashboardProps {
-  params: {
-    id: string;
-  };
-}
-
-export default function HackathonDashboard({ params }: DashboardProps) {
-  const router = useRouter();
+export default function HackathonDashboard() {
+  const params = useParams();
+  const hackathonId = params?.id as string;
+  const [hackathon, setHackathon] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("overview");
+  const router = useRouter();
 
-  // Mock data - replace with API call
-  const dashboardData = {
-    hackathon: {
-      id: params.id,
-      title: "Web3 Innovation Hackathon",
-      status: "active",
-      timeRemaining: "2 days 14 hours",
-    },
-    team: {
-      id: "team_123",
-      name: "BlockWizards",
-      code: "BW123XYZ",
-      members: [
-        {
-          id: "1",
-          name: "John Doe",
-          role: "Team Lead",
-          avatar: "/avatars/john.jpg",
-        },
-        // ... other team members
-      ],
-      maxSize: 4,
-    },
-    submission: {
-      status: "not_started", // not_started, in_progress, submitted
-      deadline: "2024-04-30T23:59:59Z",
-    },
-  };
+  useEffect(() => {
+    async function fetchHackathon() {
+      try {
+        const response = await fetch(`/api/hackathons/${hackathonId}`);
+        const data = await response.json();
+        setHackathon(data);
+      } catch (error) {
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    if (hackathonId) {
+      fetchHackathon();
+    }
+  }, [hackathonId]);
+
+  if (isLoading) {
+    return <div>Loading...</div>;
+  }
 
   return (
     <div className="container py-10">
@@ -70,10 +62,10 @@ export default function HackathonDashboard({ params }: DashboardProps) {
         <div className="flex items-start justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">
-              {dashboardData.hackathon.title}
+              {hackathon?.title}
             </h1>
             <p className="text-muted-foreground">
-              Time Remaining: {dashboardData.hackathon.timeRemaining}
+              Time Remaining: {hackathon?.timeRemaining}
             </p>
           </div>
           <Button variant="outline" onClick={() => router.push("/hackathons")}>
@@ -102,15 +94,13 @@ export default function HackathonDashboard({ params }: DashboardProps) {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {dashboardData.team ? (
+                  {hackathon?.team ? (
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
-                        <h3 className="font-semibold">
-                          {dashboardData.team.name}
-                        </h3>
+                        <h3 className="font-semibold">{hackathon.team.name}</h3>
                         <p className="text-sm text-muted-foreground">
-                          {dashboardData.team.members.length}/
-                          {dashboardData.team.maxSize} Members
+                          {hackathon.team.members.length}/
+                          {hackathon.team.maxSize} Members
                         </p>
                       </div>
                       <Button
@@ -155,14 +145,14 @@ export default function HackathonDashboard({ params }: DashboardProps) {
           </TabsContent>
 
           <TabsContent value="team">
-            <TeamManagement hackathonId={params.id} team={dashboardData.team} />
+            <TeamManagement hackathonId={hackathonId} team={hackathon?.team} />
           </TabsContent>
 
           <TabsContent value="submission">
             <ProjectSubmission
-              hackathonId={params.id}
-              team={dashboardData.team}
-              submission={dashboardData.submission as any}
+              hackathonId={hackathonId}
+              team={hackathon?.team}
+              submission={hackathon?.submission as any}
             />
           </TabsContent>
         </Tabs>

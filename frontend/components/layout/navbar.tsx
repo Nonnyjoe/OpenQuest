@@ -25,6 +25,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ROLES } from "@/lib/auth";
 import { protocolService } from "@/services/protocol-service";
+import { WalletConnect } from "@/components/wallet/wallet-connect";
 
 const navigation = [
   { name: "Hackathons", href: "/hackathons" },
@@ -96,6 +97,7 @@ export function Navbar() {
           {/* Auth Buttons */}
           <div className="hidden md:block">
             <div className="flex items-center space-x-4">
+              <WalletConnect />
               {user ? (
                 <>
                   {isAdmin ? (
@@ -208,6 +210,7 @@ export function Navbar() {
               </Link>
             ))}
             <div className="mt-4 space-y-2 px-3">
+              <WalletConnect />
               {user ? (
                 <>
                   {isAdmin ? (

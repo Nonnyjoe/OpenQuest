@@ -19,6 +19,7 @@ import {
   Users,
   Search,
   ExternalLink,
+  Plus,
 } from "lucide-react";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
@@ -29,8 +30,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { ReminderButton } from "@/components/quiz/reminder-button";
+import { useRouter } from "next/navigation";
+import { quizService } from "@/services/quiz-service";
+import { Skeleton } from "@/components/ui/skeleton";
+import { QuizList } from "@/components/quiz/quiz-list";
 
 // Types for our quiz data
 interface Quiz {
@@ -39,7 +44,7 @@ interface Quiz {
   description: string;
   startDate: string;
   duration: string;
-  difficulty: "Beginner" | "Intermediate" | "Advanced";
+  difficulty: string;
   participants: number;
   reward: string;
   status: "upcoming" | "active" | "completed";
@@ -47,86 +52,86 @@ interface Quiz {
   hasReminder?: boolean;
 }
 
-const quizzes: Quiz[] = [
-  {
-    id: "1",
-    title: "Solidity Smart Contract Challenge",
-    description:
-      "Test your knowledge of Solidity and smart contract development with this comprehensive quiz.",
-    startDate: "2024-04-01T15:00:00Z",
-    duration: "45 minutes",
-    difficulty: "Intermediate",
-    participants: 156,
-    reward: "500 USDC",
-    status: "upcoming",
-    tags: ["Solidity", "Smart Contracts", "DeFi"],
-  },
-  {
-    id: "2",
-    title: "Ethereum Layer 2 Scaling Quiz",
-    description:
-      "Assess your understanding of Ethereum's Layer 2 solutions, including Optimistic and ZK rollups.",
-    startDate: "2024-04-10T18:30:00Z",
-    duration: "40 minutes",
-    difficulty: "Advanced",
-    participants: 98,
-    reward: "300 USDC",
-    status: "upcoming",
-    tags: ["Ethereum", "Layer 2", "Rollups"],
-  },
-  {
-    id: "3",
-    title: "Blockchain Security Essentials",
-    description:
-      "Learn about common blockchain security threats and test your knowledge of best practices.",
-    startDate: "2024-03-25T12:00:00Z",
-    duration: "50 minutes",
-    difficulty: "Intermediate",
-    participants: 210,
-    reward: "400 USDC",
-    status: "active",
-    tags: ["Security", "Blockchain", "Auditing"],
-  },
-  {
-    id: "4",
-    title: "Rust for Web3 Development",
-    description:
-      "Evaluate your skills in using Rust for building blockchain applications, particularly in Solana development.",
-    startDate: "2024-04-05T14:00:00Z",
-    duration: "45 minutes",
-    difficulty: "Advanced",
-    participants: 130,
-    reward: "600 USDC",
-    status: "upcoming",
-    tags: ["Rust", "Web3", "Solana"],
-  },
-  {
-    id: "5",
-    title: "Web3 Frontend Development Challenge",
-    description:
-      "Test your proficiency in integrating Web3.js, Ethers.js, and dApp front-end frameworks.",
-    startDate: "2024-03-20T16:00:00Z",
-    duration: "35 minutes",
-    difficulty: "Beginner",
-    participants: 180,
-    reward: "250 USDC",
-    status: "completed",
-    tags: ["Web3", "Frontend", "dApps"],
-  },
-  {
-    id: "6",
-    title: "Zero-Knowledge Proofs Mastery Quiz",
-    description:
-      "Challenge yourself with questions on ZK-SNARKs, ZK-STARKs, and their applications in blockchain privacy.",
-    startDate: "2024-04-15T10:30:00Z",
-    duration: "55 minutes",
-    difficulty: "Advanced",
-    participants: 75,
-    reward: "700 USDC",
-    status: "upcoming",
-    tags: ["ZK Proofs", "Privacy", "Cryptography"],
-  },
-];
+// const quizzes: Quiz[] = [
+//   {
+//     id: "1",
+//     title: "Solidity Smart Contract Challenge",
+//     description:
+//       "Test your knowledge of Solidity and smart contract development with this comprehensive quiz.",
+//     startDate: "2024-04-01T15:00:00Z",
+//     duration: "45 minutes",
+//     difficulty: "Intermediate",
+//     participants: 156,
+//     reward: "500 USDC",
+//     status: "upcoming",
+//     tags: ["Solidity", "Smart Contracts", "DeFi"],
+//   },
+//   {
+//     id: "2",
+//     title: "Ethereum Layer 2 Scaling Quiz",
+//     description:
+//       "Assess your understanding of Ethereum's Layer 2 solutions, including Optimistic and ZK rollups.",
+//     startDate: "2024-04-10T18:30:00Z",
+//     duration: "40 minutes",
+//     difficulty: "Advanced",
+//     participants: 98,
+//     reward: "300 USDC",
+//     status: "upcoming",
+//     tags: ["Ethereum", "Layer 2", "Rollups"],
+//   },
+//   {
+//     id: "3",
+//     title: "Blockchain Security Essentials",
+//     description:
+//       "Learn about common blockchain security threats and test your knowledge of best practices.",
+//     startDate: "2024-03-25T12:00:00Z",
+//     duration: "50 minutes",
+//     difficulty: "Intermediate",
+//     participants: 210,
+//     reward: "400 USDC",
+//     status: "active",
+//     tags: ["Security", "Blockchain", "Auditing"],
+//   },
+//   {
+//     id: "4",
+//     title: "Rust for Web3 Development",
+//     description:
+//       "Evaluate your skills in using Rust for building blockchain applications, particularly in Solana development.",
+//     startDate: "2024-04-05T14:00:00Z",
+//     duration: "45 minutes",
+//     difficulty: "Advanced",
+//     participants: 130,
+//     reward: "600 USDC",
+//     status: "upcoming",
+//     tags: ["Rust", "Web3", "Solana"],
+//   },
+//   {
+//     id: "5",
+//     title: "Web3 Frontend Development Challenge",
+//     description:
+//       "Test your proficiency in integrating Web3.js, Ethers.js, and dApp front-end frameworks.",
+//     startDate: "2024-03-20T16:00:00Z",
+//     duration: "35 minutes",
+//     difficulty: "Beginner",
+//     participants: 180,
+//     reward: "250 USDC",
+//     status: "completed",
+//     tags: ["Web3", "Frontend", "dApps"],
+//   },
+//   {
+//     id: "6",
+//     title: "Zero-Knowledge Proofs Mastery Quiz",
+//     description:
+//       "Challenge yourself with questions on ZK-SNARKs, ZK-STARKs, and their applications in blockchain privacy.",
+//     startDate: "2024-04-15T10:30:00Z",
+//     duration: "55 minutes",
+//     difficulty: "Advanced",
+//     participants: 75,
+//     reward: "700 USDC",
+//     status: "upcoming",
+//     tags: ["ZK Proofs", "Privacy", "Cryptography"],
+//   },
+// ];
 
 const difficultyColors = {
   Beginner: "bg-green-500/10 text-green-500",
@@ -141,12 +146,58 @@ const statusColors = {
 };
 
 export default function QuizzesPage() {
+  const router = useRouter();
+  const [quizzes, setQuizzes] = useState<Quiz[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [difficultyFilter, setDifficultyFilter] = useState<string>("all");
 
+  useEffect(() => {
+    async function fetchQuizzes() {
+      try {
+        setIsLoading(true);
+
+        const response = await quizService.getAllQuizzes();
+
+        // Transform the API response to match our UI format
+        const transformedQuizzes = response.map((quiz: any) => ({
+          id: quiz.uuid,
+          title: quiz.name,
+          description: quiz.description,
+          startDate: new Date(quiz.start_time * 1000).toISOString(),
+          duration: `${Math.floor(
+            quiz.duration_in_sec_timestamp / 60
+          )} minutes`,
+          difficulty: quiz.difficulty,
+          participants: quiz.participants?.length || 0,
+          reward: `${quiz.total_reward} USDC`,
+          status: quiz.status.toLowerCase() as
+            | "upcoming"
+            | "active"
+            | "completed",
+          tags: [],
+          hasReminder: false,
+        }));
+
+        console.log("Transformed quizzes:", transformedQuizzes);
+        setQuizzes(transformedQuizzes);
+      } catch (error) {
+        console.error("Error fetching quizzes:", error);
+        console.error("Error details:", {
+          message: (error as Error).message,
+          stack: (error as Error).stack,
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    fetchQuizzes();
+  }, []);
+
   // Filter quizzes based on search query and difficulty
   const filteredQuizzes = useMemo(() => {
-    return quizzes.filter((quiz) => {
+    const filtered = quizzes.filter((quiz) => {
       const matchesSearch =
         searchQuery.trim() === ""
           ? true
@@ -162,7 +213,9 @@ export default function QuizzesPage() {
 
       return matchesSearch && matchesDifficulty;
     });
-  }, [searchQuery, difficultyFilter]);
+    console.log("Filtered quizzes:", filtered);
+    return filtered;
+  }, [quizzes, searchQuery, difficultyFilter]);
 
   // Filter by status
   const upcomingQuizzes = filteredQuizzes.filter(
@@ -193,7 +246,11 @@ export default function QuizzesPage() {
                   </h3>
                   <Badge
                     variant="secondary"
-                    className={difficultyColors[quiz.difficulty]}
+                    className={
+                      difficultyColors[
+                        quiz.difficulty as keyof typeof difficultyColors
+                      ]
+                    }
                   >
                     {quiz.difficulty}
                   </Badge>
@@ -393,7 +450,13 @@ export default function QuizzesPage() {
           </div>
 
           <TabsContent value="all" className="space-y-4">
-            {filteredQuizzes.length > 0 ? (
+            {isLoading ? (
+              <div className="space-y-4">
+                {[1, 2, 3].map((n) => (
+                  <QuizCardSkeleton key={n} />
+                ))}
+              </div>
+            ) : filteredQuizzes.length > 0 ? (
               filteredQuizzes.map((quiz) => (
                 <QuizCard key={quiz.id} quiz={quiz} />
               ))
@@ -452,6 +515,21 @@ function EmptyState({ message }: { message: string }) {
       </div>
       <h3 className="mt-4 text-lg font-medium">No Quizzes Found</h3>
       <p className="mt-2 text-sm text-muted-foreground">{message}</p>
+    </div>
+  );
+}
+
+// Add a loading skeleton component
+function QuizCardSkeleton() {
+  return (
+    <div className="rounded-lg border p-4 space-y-3">
+      <div className="h-6 w-1/3 bg-muted rounded animate-pulse" />
+      <div className="h-4 w-2/3 bg-muted rounded animate-pulse" />
+      <div className="flex gap-4">
+        <div className="h-4 w-20 bg-muted rounded animate-pulse" />
+        <div className="h-4 w-20 bg-muted rounded animate-pulse" />
+        <div className="h-4 w-20 bg-muted rounded animate-pulse" />
+      </div>
     </div>
   );
 }

@@ -25,10 +25,26 @@ import { QuestionInput } from "@/components/quiz/question-input";
 import { QuizIntro } from "@/components/quiz/quiz-intro";
 import { quizService } from "@/services/quiz-service";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useWriteContract, useAccount } from "wagmi";
+import { keccak256, toBytes } from "viem";
+import { ProtocolABI } from "@/lib/abi";
 
 interface QuizAnswer {
   questionId: string;
   answer: string | string[];
+}
+
+interface QuizQuestion {
+  id: string;
+  originalId: number;
+  text: string;
+  type: QuestionType;
+  options: Array<{
+    id: string;
+    text: string;
+    isCorrect: boolean;
+  }>;
+  points: number;
 }
 
 export default function QuizPage() {
@@ -43,25 +59,64 @@ export default function QuizPage() {
     number | null
   >(null);
   const [answers, setAnswers] = useState<QuizAnswer[]>([]);
-  const [timeRemaining, setTimeRemaining] = useState<number>(30 * 60); // 30 minutes in seconds
+  const [timeRemaining, setTimeRemaining] = useState<number>(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [progress, setProgress] = useState(0);
+
+  const { isConnected } = useAccount();
+  const { writeContract, isPending } = useWriteContract();
+
+  useEffect(() => {
+    console.log("Quiz page params:", params);
+    console.log("Quiz ID from params:", quizId);
+  }, [params, quizId]);
 
   useEffect(() => {
     if (!quizId) return;
 
     async function fetchQuiz() {
       try {
-        const data = await quizService.getQuizById(quizId);
-        setQuiz(data);
+        setIsLoading(true);
+        const response = await quizService.getQuizById(quizId);
+
+        // Transform quiz data to match our UI needs
+        const transformedQuiz = {
+          id: response.uuid,
+          name: response.name,
+          description: response.description,
+          duration_in_sec_timestamp: response.duration_in_sec_timestamp,
+          difficulty: response.difficulty,
+          total_reward: response.total_reward,
+          questions:
+            response.questions?.map((q: any, index: number) => ({
+              id: String(index + 1),
+              originalId: q.id,
+              text: q.question_text,
+              type: QuestionType.SINGLE_CHOICE,
+              options: q.options.map((opt: any) => ({
+                id: opt.option_index,
+                text: opt.text,
+                isCorrect: opt.option_index === q.correct_answer,
+              })),
+              points: 10,
+            })) || [],
+        };
+
+        setQuiz(transformedQuiz);
+        setTimeRemaining(transformedQuiz.duration_in_sec_timestamp);
       } catch (error) {
-        console.error("Error fetching quiz:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load quiz. Please try again.",
+          variant: "destructive",
+        });
       } finally {
         setIsLoading(false);
       }
     }
 
     fetchQuiz();
-  }, [quizId]);
+  }, [quizId, toast]);
 
   const handleStart = () => {
     setHasStarted(true);
@@ -70,36 +125,97 @@ export default function QuizPage() {
 
   const handleAnswer = (answer: string | string[]) => {
     const currentQuestion = quiz.questions[currentQuestionIndex as number];
+
     setAnswers((prev) => {
-      const existing = prev.findIndex(
+      // Create new answer object
+      const newAnswer = {
+        questionId: currentQuestion.id,
+        answer: Array.isArray(answer) ? answer[0] : answer,
+      };
+
+      // Find if this question was already answered
+      const existingIndex = prev.findIndex(
         (a) => a.questionId === currentQuestion.id
       );
-      if (existing !== -1) {
-        const updated = [...prev];
-        updated[existing] = { questionId: currentQuestion.id, answer };
-        return updated;
+
+      let updated;
+      if (existingIndex !== -1) {
+        // Replace existing answer
+        updated = [...prev];
+        updated[existingIndex] = newAnswer;
+      } else {
+        // Add new answer
+        updated = [...prev, newAnswer];
       }
-      return [...prev, { questionId: currentQuestion.id, answer }];
+
+      // Update progress
+      const uniqueAnswered = new Set(updated.map((a) => a.questionId)).size;
+      setProgress(uniqueAnswered);
+
+      return updated;
     });
   };
 
   const handleSubmit = async () => {
-    setIsSubmitting(true);
     try {
-      // TODO: Implement submission logic
+      if (!isConnected) {
+        toast({
+          title: "Wallet Not Connected",
+          description: "Please connect your wallet to submit the quiz",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setIsSubmitting(true);
+
+      // Format answers for submission
+      const formattedAnswers = answers.map((answer) => {
+        const question = quiz.questions.find(
+          (q: QuizQuestion) => q.id === answer.questionId
+        );
+        return {
+          question_id: Number(question?.originalId),
+          answer: String(answer.answer).toUpperCase(),
+        };
+      });
+
+      // Create submission object
+      const submission = {
+        quiz_id: quizId,
+        answers: formattedAnswers,
+      };
+
+      // Hash the submission object
+      const submissionHash = keccak256(toBytes(JSON.stringify(submission)));
+
+      // Submit hash to smart contract
+      await writeContract({
+        address: "0xCd1a3b3FADffAcf76beA7B5C264515E91f996Cc1",
+        abi: ProtocolABI,
+        functionName: "submitQuiz",
+        args: [submissionHash],
+      });
+
+      // Submit answers to backend
+      await quizService.submitQuiz(quizId, formattedAnswers);
+
       toast({
         title: "Quiz Submitted",
-        description: "Your answers have been recorded.",
+        description: "Your answers have been submitted successfully",
       });
-      router.push(`/quizzes/${params.id}/results`);
+
+      router.push(`/quizzes/${quizId}/results`);
     } catch (error) {
+      console.error("Failed to submit quiz:", error);
       toast({
         title: "Error",
         description: "Failed to submit quiz. Please try again.",
         variant: "destructive",
       });
+    } finally {
+      setIsSubmitting(false);
     }
-    setIsSubmitting(false);
   };
 
   const handleTimeUp = () => {
@@ -142,11 +258,12 @@ export default function QuizPage() {
         <QuizIntro
           title={quiz.name}
           description={quiz.description}
-          duration={quiz.duration_in_sec_timestamp}
+          duration={Math.ceil(quiz.duration_in_sec_timestamp / 60)}
           totalQuestions={quiz.questions?.length || 0}
           difficulty={quiz.difficulty}
           reward={quiz.total_reward}
           onStart={handleStart}
+          quizId={quiz.id}
         />
       </div>
     );
@@ -167,7 +284,7 @@ export default function QuizPage() {
 
         {currentQuestionIndex !== null && (
           <QuizProgress
-            currentQuestion={answers.length}
+            currentQuestion={progress}
             totalQuestions={quiz.questions.length}
           />
         )}

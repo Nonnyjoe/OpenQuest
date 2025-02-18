@@ -126,7 +126,7 @@ export default function NewHackathonPage() {
     setIsLoading(true);
     try {
       // TODO: Implement hackathon creation logic
-      console.log(data);
+
       toast({
         title: "Hackathon Created",
         description: "Your hackathon has been successfully created.",

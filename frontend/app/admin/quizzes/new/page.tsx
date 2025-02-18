@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { motion } from "framer-motion";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -78,10 +78,10 @@ const formSchema = z.object({
   difficulty: z.enum(["Easy", "Medium", "Hard"]),
   description: z.string().min(1, "Description is required"),
   access: z.enum(["Public", "Private"]),
-  total_reward: z.number().min(0),
-  max_reward_per_user: z.number().min(0),
-  duration_in_sec_timestamp: z.number().min(1),
-  start_time: z.number(),
+  total_reward: z.coerce.number().min(0),
+  max_reward_per_user: z.coerce.number().min(0),
+  duration_in_sec_timestamp: z.coerce.number().min(1),
+  start_time: z.coerce.number(),
   reward_type: z.enum(["distributed_by_rank", "fixed"]),
   questions: z
     .array(questionSchema)
@@ -112,7 +112,7 @@ const convertToComponentQuestion = (formQuestion: any): Question => ({
   points: 1,
 });
 
-export default function NewQuizPage() {
+function NewQuizForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const protocolId = searchParams.get("protocolId");
@@ -126,6 +126,7 @@ export default function NewQuizPage() {
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
+    mode: "onChange",
     defaultValues: {
       name: "",
       difficulty: "Easy",
@@ -182,11 +183,12 @@ export default function NewQuizPage() {
     setIsSaving(true);
     try {
       form.setValue(field as keyof z.infer<typeof formSchema>, value);
-      // Could add auto-save functionality here
     } finally {
       setIsSaving(false);
     }
   };
+
+  const formState = form.formState;
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     if (!protocolId) {
@@ -200,33 +202,44 @@ export default function NewQuizPage() {
 
     setIsSubmitting(true);
     try {
-      const formattedData = {
-        ...values,
+      const formattedData: CreateQuizDto = {
+        name: values.name,
+        difficulty: values.difficulty,
+        description: values.description,
         protocol: protocolId,
-        questions: values.questions.map((q) => ({
-          ...q,
-          id: Number(q.id),
+        access: values.access,
+        total_reward: Number(values.total_reward),
+        max_reward_per_user: Number(values.max_reward_per_user),
+        duration_in_sec_timestamp:
+          Number(values.duration_in_sec_timestamp) * 60,
+        start_time: Math.floor(Date.now() / 1000),
+        reward_type: values.reward_type,
+        questions: values.questions.map((q, index) => ({
+          id: index + 1,
           question_text: q.question_text,
-          options: q.options.map((opt, idx) => ({
-            text: opt.text,
-            option_index: ["A", "B", "C", "D"][idx],
-          })),
+          options: [
+            { text: q.options[0].text, option_index: "A" },
+            { text: q.options[1].text, option_index: "B" },
+            { text: q.options[2].text, option_index: "C" },
+            { text: q.options[3].text, option_index: "D" },
+          ],
           correct_answer: q.correct_answer,
         })),
       };
 
-      console.log("Submitting quiz:", formattedData);
-      await quizService.createQuiz(formattedData as CreateQuizDto);
+      const response = await quizService.createQuiz(formattedData);
 
       toast({
         title: "Success",
         description: "Quiz created successfully",
       });
-    } catch (error) {
-      console.error("Failed to create quiz:", error);
+
+      setCreatedQuizId(response.quiz_uuid);
+      setQuizCreated(true);
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Failed to create quiz",
+        description: error.response?.data?.message || "Failed to create quiz",
         variant: "destructive",
       });
     } finally {
@@ -291,7 +304,9 @@ export default function NewQuizPage() {
 
             <Form {...form}>
               <form
-                onSubmit={form.handleSubmit(onSubmit)}
+                onSubmit={(e) => {
+                  form.handleSubmit(onSubmit)(e);
+                }}
                 className="space-y-6"
               >
                 <TabsContent value="basic">
@@ -445,6 +460,8 @@ export default function NewQuizPage() {
                             ),
                             totalPoints: form.getValues("questions").length,
                             passingScore: 0,
+                            randomizeQuestions: false,
+                            randomizeOptions: false,
                           }}
                         />
                       </div>
@@ -578,6 +595,7 @@ export default function NewQuizPage() {
                   type="submit"
                   className="w-full mt-6"
                   disabled={isSubmitting || isSaving}
+                  onClick={() => console.log("Submit button clicked")}
                 >
                   {isSubmitting ? (
                     <>
@@ -599,5 +617,13 @@ export default function NewQuizPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function NewQuizPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <NewQuizForm />
+    </Suspense>
   );
 }

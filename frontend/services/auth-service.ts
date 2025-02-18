@@ -185,6 +185,16 @@ export const authService = {
       return false;
     }
   },
+
+  async healthCheck() {
+    try {
+      const response = await apiClient.get("/health");
+      return response.data;
+    } catch (error) {
+      console.error("Health check failed:", error);
+      throw error;
+    }
+  },
 };
 
 export function startRefreshTokenInterval() {}

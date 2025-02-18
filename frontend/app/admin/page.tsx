@@ -9,17 +9,15 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { motion } from "framer-motion";
-import { Plus, Settings, Users, Activity, Trophy } from "lucide-react";
+import { Plus, Settings, Users, Activity, Trophy, Rocket } from "lucide-react";
 import Link from "next/link";
 import { useAdminProtocols } from "@/lib/hooks/use-admin-protocols";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useRouter } from "next/navigation";
 
 export default function AdminDashboard() {
   const { data: protocols, isLoading } = useAdminProtocols();
-
-  // Add debug logs
-  console.log("Admin Dashboard - User's protocols:", protocols);
-  console.log("Admin Dashboard - Loading state:", isLoading);
+  const router = useRouter();
 
   if (isLoading) {
     return (
@@ -126,27 +124,37 @@ export default function AdminDashboard() {
                     </div>
 
                     <div className="flex flex-wrap gap-3">
-                      <Button variant="outline" size="sm" asChild>
-                        <Link
-                          href={`/admin/quizzes/new?protocolId=${protocol.id}`}
-                        >
-                          <Trophy className="mr-2 h-4 w-4" />
-                          Quizzes
-                        </Link>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          router.push(`/admin/protocols/${protocol.id}/quizzes`)
+                        }
+                      >
+                        <Trophy className="mr-2 h-4 w-4" />
+                        Quizzes
                       </Button>
-                      <Button variant="outline" size="sm" asChild>
-                        <Link
-                          href={`/admin/protocols/${protocol.id}/hackathons`}
-                        >
-                          <Activity className="mr-2 h-4 w-4" />
-                          Hackathons
-                        </Link>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          router.push(
+                            `/admin/protocols/${protocol.id}/hackathons`
+                          )
+                        }
+                      >
+                        <Rocket className="mr-2 h-4 w-4" />
+                        Hackathons
                       </Button>
-                      <Button variant="outline" size="sm" asChild>
-                        <Link href={`/admin/protocols/${protocol.id}/staff`}>
-                          <Users className="mr-2 h-4 w-4" />
-                          Staff
-                        </Link>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          router.push(`/admin/protocols/${protocol.id}/staff`)
+                        }
+                      >
+                        <Users className="mr-2 h-4 w-4" />
+                        Staff
                       </Button>
                       <Button variant="outline" size="sm" asChild>
                         <Link href={`/admin/protocols/${protocol.id}/settings`}>

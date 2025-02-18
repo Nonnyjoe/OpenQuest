@@ -9,6 +9,8 @@ import { Footer } from "@/components/layout/footer";
 import { Navbar } from "@/components/layout/navbar";
 import { AuthProvider } from "@/contexts/auth-context";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { WagmiProvider } from "wagmi";
+import { config } from "@/config";
 
 const fontSans = FontSans({
   subsets: ["latin"],
@@ -30,23 +32,25 @@ export default function RootLayout({
           fontSans.variable
         )}
       >
-        <AuthProvider>
-          <ThemeProvider
-            attribute="class"
-            defaultTheme="dark"
-            enableSystem={false}
-            disableTransitionOnChange
-          >
-            <QueryClientProvider client={queryClient}>
-              <div className="relative flex min-h-screen flex-col bg-background text-foreground">
-                <Navbar />
-                <main className="flex-1 pt-14">{children}</main>
-                <Footer />
-              </div>
-              <Toaster />
-            </QueryClientProvider>
-          </ThemeProvider>
-        </AuthProvider>
+        <WagmiProvider config={config}>
+          <AuthProvider>
+            <ThemeProvider
+              attribute="class"
+              defaultTheme="dark"
+              enableSystem={false}
+              disableTransitionOnChange
+            >
+              <QueryClientProvider client={queryClient}>
+                <div className="relative flex min-h-screen flex-col bg-background text-foreground">
+                  <Navbar />
+                  <main className="flex-1 pt-14">{children}</main>
+                  <Footer />
+                </div>
+                <Toaster />
+              </QueryClientProvider>
+            </ThemeProvider>
+          </AuthProvider>
+        </WagmiProvider>
       </body>
     </html>
   );

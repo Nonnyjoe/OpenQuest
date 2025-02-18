@@ -16,6 +16,8 @@ export interface QuizSettings {
   duration_in_sec_timestamp: number;
   totalPoints: number;
   passingScore: number;
+  randomizeQuestions: boolean;
+  randomizeOptions: boolean;
 }
 
 export interface Question {

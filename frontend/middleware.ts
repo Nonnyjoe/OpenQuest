@@ -6,9 +6,6 @@ export function middleware(request: NextRequest) {
 
   const authToken = request.cookies.get("token")?.value;
 
-  // We can see this in server logs
-  console.log("Has auth token:", !!authToken);
-
   // Security Headers with updated CSP
   const cspHeader = `
     default-src 'self';

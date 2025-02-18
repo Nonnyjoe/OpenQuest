@@ -34,10 +34,11 @@ const protocolSchema = z.object({
 type ProtocolFormValues = z.infer<typeof protocolSchema>;
 
 export default function CreateProtocolPage() {
-  const [isLoading, setIsLoading] = useState(false);
-  const { toast } = useToast();
   const router = useRouter();
+  const { toast } = useToast();
   const { user } = useAuth();
+  const [isClient, setIsClient] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const form = useForm<ProtocolFormValues>({
     resolver: zodResolver(protocolSchema),
     defaultValues: {
@@ -45,8 +46,17 @@ export default function CreateProtocolPage() {
     },
   });
 
-  console.log("Protocols/new - Current user:", user);
-  console.log("Protocols/new - Cookies:", document.cookie);
+  useEffect(() => {
+    setIsClient(true);
+
+    if (typeof document !== "undefined") {
+    }
+  }, [user]);
+
+  // Don't render anything until we're on the client
+  if (!isClient) {
+    return <div>Loading...</div>;
+  }
 
   useEffect(() => {
     // Handle redirects in useEffect
