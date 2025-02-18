@@ -107,15 +107,7 @@ Cartesi, EigenLayer, Next.js, Rust, Actix-web, Solidity
 
 ### Starting the Frontend:
 
-# OpenQuest
-
-### Repository for OpenQuest project built for the Cartesi X Eigen layer Experiment week
-
-## Overview
-
-OpenQuest is an interactive learning platform that enables protocols to create quizzes and hackathons with reward distribution capabilities. Built during the Cartesi X Eigen layer Experiment week.
-
-## Features
+#### Features
 
 - Protocol Management
   - Create and manage multiple protocols
@@ -133,14 +125,14 @@ OpenQuest is an interactive learning platform that enables protocols to create q
   - View and edit profile details
   - Manage wallet connections
 
-## Prerequisites
+#### Prerequisites
 
 - Node.js (v18 or higher)
 - MetaMask wallet extension
 - Access to OpenQuest backend server
 - Git
 
-## Installation
+#### Installation
 
 1. Clone the repository:
 
@@ -169,7 +161,7 @@ OpenQuest is an interactive learning platform that enables protocols to create q
 
 5. Open your browser and navigate to `http://localhost:3000` to access the application.
 
-## Getting Started
+#### Getting Started
 
 1. **Connect Your Wallet**
 
@@ -199,14 +191,14 @@ OpenQuest is an interactive learning platform that enables protocols to create q
    - Answer questions within the time limit
    - Submit answers
 
-## Known Limitations
+#### Known Limitations
 
 - Hackathon features are under development
 - Quiz creation functionality needs backend integration
 
-## Development Status
+#### Development Status
 
-### Working Features
+#### Working Features
 
 - Protocol creation and management
 - Quiz listing and attempt quiz from frontend
@@ -216,12 +208,12 @@ OpenQuest is an interactive learning platform that enables protocols to create q
 - Quiz creation from backend
 - Quiz attempt from frontend
 
-### In Progress
+#### In Progress
 
 - Hackathon implementation
 - Quiz creation functionality from frontend
 
-## Tech Stack
+#### Tech Stack
 
 - Next.js 14
 - TypeScript
