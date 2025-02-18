@@ -73,4 +73,38 @@ Cartesi, EigenLayer, Next.js, Rust, Actix-web, Solidity
 
 ---
 
+## Running Locally:
+
+### Starting the Backend:
+
+- CD into server directory, create a .env file with the necessary values mentioned in the .env.example file.
+- CD out and into the contracts directory, create another .env file with the details found in the .env.example file of the contracts dir.
+- CD into the Coprocessor Directory, using the cartesi-coprocessor cli, run the start devnet command then publish the program to devnet:
+
+  ```bash
+  cartesi-coprocessor start-devnet
+  ```
+
+  ```bash
+  cartesi-coprocessor pubish --network devnet
+  ```
+
+- Copy the machine hash gotten after publishing the coprocessor program, cd into the contracts directory and modify the .env file with the machine hash.
+- While in the contracts folder run the command below to Deploy the Protocol Factory contract:
+
+  ```bash
+    forge script script/DeployFactory.s.sol --rpc-url http://localhost:8545 --broadcast --private-key <Private key to deploy the factory>
+  ```
+
+  **Note:** The private key passed in the command above should be the same passed in the .env files to avoid reverts due to contract ownership.
+
+- Copy the address of the protocol factory gotten from the previous command then navigate to the server directory and modify the env with the new protocol factory address (OPENQUEST_FACTORY)
+- Start your server by running the following command:
+  ```bash
+  cargo run
+  ```
+  **Note:** If you experience permission issue running the `cargo run` command, you can run this instead to fix that: `sudo cargo run`.
+
+### Starting the Backend:
+
 ### Made with ❤️ by the OpenQuest Team.
